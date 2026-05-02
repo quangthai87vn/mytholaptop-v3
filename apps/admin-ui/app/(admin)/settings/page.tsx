@@ -1,0 +1,510 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import {
+  Building2,
+  Globe,
+  Key,
+  Database,
+  Palette,
+  Save,
+  Eye,
+  EyeOff,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import { defaultSettings } from "@/lib/mock-data";
+import { loadSettings, saveSettings } from "@/lib/settings-storage";
+import type { Settings } from "@/types";
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [showSecret, setShowSecret] = useState<Record<string, boolean>>({});
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [isFetchingToken, setIsFetchingToken] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Load settings from server on mount
+  useEffect(() => {
+    loadSettings().then((s) => {
+      setSettings(s);
+      setIsLoaded(true);
+    });
+  }, []);
+
+  const toggleSecret = (key: string) => {
+    setShowSecret((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveSettings(settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setSaveError("Không thể lưu cài đặt. Vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
+  }, [settings]);
+
+  const handleFetchToken = useCallback(async () => {
+    const { adminEmail, adminPassword, backendUrl } = settings.medusa;
+    if (!adminEmail || !adminPassword || !backendUrl) {
+      setSaveError("Vui lòng nhập đầy đủ Email, Password và Backend URL.");
+      return;
+    }
+    setIsFetchingToken(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/auth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          backendUrl,
+          email: adminEmail,
+          password: adminPassword,
+        }),
+      });
+      const data = await res.json();
+      if (data.token) {
+        setSettings((prev) => ({
+          ...prev,
+          medusa: { ...prev.medusa, adminApiKey: data.token },
+        }));
+      } else {
+        setSaveError(data.error || "Không lấy được JWT Token. Vui lòng kiểm tra email/password và Backend URL.");
+      }
+    } catch {
+      setSaveError("Không kết nối được Medusa Backend. Vui lòng kiểm tra Medusa đang chạy và Backend URL.");
+    } finally {
+      setIsFetchingToken(false);
+    }
+  }, [settings.medusa]);
+
+  const updateSettings = useCallback((path: string, value: string | boolean) => {
+    setSettings((prev) => {
+      const next = { ...prev };
+      const keys = path.split(".");
+      let current: Record<string, unknown> = next;
+      for (let i = 0; i < keys.length - 1; i++) {
+        current[keys[i]] = { ...(current[keys[i]] as Record<string, unknown>) };
+        current = current[keys[i]] as Record<string, unknown>;
+      }
+      current[keys[keys.length - 1]] = value;
+      return next;
+    });
+  }, []);
+
+  if (!isLoaded) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-48 animate-pulse rounded-md bg-muted" />
+        <div className="h-4 w-96 animate-pulse rounded-md bg-muted" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Page header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Cài đặt</h1>
+          <p className="text-muted-foreground">
+            Cấu hình hệ thống và thông tin cửa hàng.
+          </p>
+        </div>
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className={cn(saved && "bg-green-600 hover:bg-green-600")}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 size-4 animate-spin" />
+              Đang lưu...
+            </>
+          ) : saved ? (
+            <>
+              <CheckCircle className="mr-2 size-4" />
+              Đã lưu!
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 size-4" />
+              Lưu thay đổi
+            </>
+          )}
+        </Button>
+      </div>
+      {saveError && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
+          <AlertCircle className="size-4" />
+          {saveError}
+        </div>
+      )}
+
+      <Tabs defaultValue="company">
+        <TabsList>
+          <TabsTrigger value="company">
+            <Building2 className="mr-2 size-4" />
+            Thông tin công ty
+          </TabsTrigger>
+          <TabsTrigger value="woocommerce">
+            <Globe className="mr-2 size-4" />
+            WooCommerce
+          </TabsTrigger>
+          <TabsTrigger value="medusa">
+            <Database className="mr-2 size-4" />
+            Medusa
+          </TabsTrigger>
+          <TabsTrigger value="ui">
+            <Palette className="mr-2 size-4" />
+            Giao diện
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Company info */}
+        <TabsContent value="company">
+          <Card>
+            <CardHeader>
+              <CardTitle>Thông tin công ty</CardTitle>
+              <CardDescription>
+                Thông tin cơ bản của cửa hàng
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="company-name">Tên công ty</Label>
+                  <Input
+                    id="company-name"
+                    value={settings.company.name}
+                    onChange={(e) => updateSettings("company.name", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company-website">Website</Label>
+                  <Input
+                    id="company-website"
+                    placeholder="https://mytholaptop.vn"
+                    value={settings.company.website}
+                    onChange={(e) => updateSettings("company.website", e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="company-phone">Số điện thoại</Label>
+                  <Input
+                    id="company-phone"
+                    placeholder="0273.123.456"
+                    value={settings.company.phone}
+                    onChange={(e) => updateSettings("company.phone", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company-logo">Logo URL</Label>
+                  <Input
+                    id="company-logo"
+                    placeholder="https://example.com/logo.png"
+                    value={settings.company.logoUrl}
+                    onChange={(e) => updateSettings("company.logoUrl", e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company-address">Địa chỉ</Label>
+                <Input
+                  id="company-address"
+                  placeholder="123 Nguyễn Trãi, P.1, TP. Mỹ Tho, Tiền Giang"
+                  value={settings.company.address}
+                  onChange={(e) => updateSettings("company.address", e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* WooCommerce */}
+        <TabsContent value="woocommerce">
+          <Card>
+            <CardHeader>
+              <CardTitle>Cấu hình WooCommerce</CardTitle>
+              <CardDescription>
+                Kết nối WordPress/WooCommerce để migration dữ liệu. Cấu hình ở đây sẽ
+                được sử dụng lại tại trang Migration.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="woo-url">WordPress API URL</Label>
+                <Input
+                  id="woo-url"
+                  placeholder="https://mytholaptop.vn/wp-json"
+                  value={settings.wooCommerce.wordpressUrl}
+                  onChange={(e) =>
+                    updateSettings("wooCommerce.wordpressUrl", e.target.value)
+                  }
+                />
+              </div>
+              <Separator />
+              <div className="space-y-2">
+                <Label htmlFor="woo-key">Consumer Key</Label>
+                <div className="relative">
+                  <Input
+                    id="woo-key"
+                    type={showSecret.wooKey ? "text" : "password"}
+                    placeholder="ck_xxxxxxxxxxxxxxxx"
+                    value={settings.wooCommerce.consumerKey}
+                    onChange={(e) =>
+                      updateSettings("wooCommerce.consumerKey", e.target.value)
+                    }
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 size-8"
+                    onClick={() => toggleSecret("wooKey")}
+                  >
+                    {showSecret.wooKey ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="woo-secret">Consumer Secret</Label>
+                <div className="relative">
+                  <Input
+                    id="woo-secret"
+                    type={showSecret.wooSecret ? "text" : "password"}
+                    placeholder="cs_xxxxxxxxxxxxxxxx"
+                    value={settings.wooCommerce.consumerSecret}
+                    onChange={(e) =>
+                      updateSettings("wooCommerce.consumerSecret", e.target.value)
+                    }
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 size-8"
+                    onClick={() => toggleSecret("wooSecret")}
+                  >
+                    {showSecret.wooSecret ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Medusa */}
+        <TabsContent value="medusa">
+          <div className="space-y-6">
+            {/* Login credentials - dùng để lấy JWT */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Đăng nhập Medusa Admin</CardTitle>
+                <CardDescription>
+                  Nhập email và password để lấy JWT Token tự động. Token sẽ được
+                  dùng cho các thao tác migration.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="medusa-email">Email Admin</Label>
+                    <Input
+                      id="medusa-email"
+                      type="email"
+                      placeholder="admin@mytholaptop.vn"
+                      value={settings.medusa.adminEmail}
+                      onChange={(e) =>
+                        updateSettings("medusa.adminEmail", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="medusa-password">Password Admin</Label>
+                    <div className="relative">
+                      <Input
+                        id="medusa-password"
+                        type={showSecret.medusaPassword ? "text" : "password"}
+                        placeholder="Nhập password"
+                        value={settings.medusa.adminPassword}
+                        onChange={(e) =>
+                          updateSettings("medusa.adminPassword", e.target.value)
+                        }
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 size-8"
+                        onClick={() => toggleSecret("medusaPassword")}
+                      >
+                        {showSecret.medusaPassword ? (
+                          <EyeOff className="size-4" />
+                        ) : (
+                          <Eye className="size-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="medusa-url">Medusa Backend URL</Label>
+                  <Input
+                    id="medusa-url"
+                    placeholder="http://localhost:9000"
+                    value={settings.medusa.backendUrl}
+                    onChange={(e) =>
+                      updateSettings("medusa.backendUrl", e.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="medusa-key">
+                    <Key className="inline mr-1 size-3" />
+                    JWT Token (Admin API Key)
+                  </Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        id="medusa-key"
+                        type={showSecret.medusaKey ? "text" : "password"}
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        value={settings.medusa.adminApiKey}
+                        onChange={(e) =>
+                          updateSettings("medusa.adminApiKey", e.target.value)
+                        }
+                        className="pr-10 font-mono text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 size-8"
+                        onClick={() => toggleSecret("medusaKey")}
+                      >
+                        {showSecret.medusaKey ? (
+                          <EyeOff className="size-4" />
+                        ) : (
+                          <Eye className="size-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      onClick={handleFetchToken}
+                      disabled={isFetchingToken}
+                    >
+                      {isFetchingToken ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Key className="size-4" />
+                      )}
+                      Lấy Token
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Nhấn <strong>Lấy Token</strong> để tạo JWT từ Medusa Admin (bắt đầu bằng <code className="rounded bg-muted px-1">eyJ</code>, có 3 phần ngăn cách bởi dấu <code className="rounded bg-muted px-1">.</code>). Sau đó bấm <strong>Lưu thay đổi</strong> để lưu lại.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* UI settings */}
+        <TabsContent value="ui">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tuỳ chọn giao diện</CardTitle>
+              <CardDescription>
+                Tùy chỉnh giao diện admin dashboard
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label>Màu chủ đạo</Label>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="size-10 rounded-lg border-2 border-primary"
+                    style={{ backgroundColor: settings.ui.primaryColor }}
+                  />
+                  <Input
+                    value={settings.ui.primaryColor}
+                    onChange={(e) =>
+                      updateSettings("ui.primaryColor", e.target.value)
+                    }
+                    className="w-40 font-mono"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    #E60012 — Đỏ Mỹ Tho Laptop
+                  </span>
+                </div>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Chế độ Dark Mode</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Bật chế độ tối cho giao diện admin
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.ui.darkMode}
+                  onCheckedChange={(checked) =>
+                    updateSettings("ui.darkMode", checked)
+                  }
+                />
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Sidebar thu gọn mặc định</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Sidebar thu gọn khi mới mở dashboard
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.ui.sidebarCollapsed}
+                  onCheckedChange={(checked) =>
+                    updateSettings("ui.sidebarCollapsed", checked)
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

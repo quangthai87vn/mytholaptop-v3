@@ -1,0 +1,25 @@
+{
+  "name": "mytholaptop-v3",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:admin": "pnpm --filter admin-ui dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "build:admin": "pnpm --filter admin-ui build",
+    "build:backend": "pnpm --filter backend build",
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

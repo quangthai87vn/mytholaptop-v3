@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "noEmit": false,
+    "outDir": "./dist-migration"
+  },
+  "include": ["lib/migration/**/*.ts", "services/**/*.ts", "types/**/*.ts"],
+  "exclude": ["node_modules", "app/**", "components/**", "hooks/**"]
+}

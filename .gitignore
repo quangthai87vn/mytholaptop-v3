@@ -1,0 +1,38 @@
+node_modules
+
+# Environment files (secrets)
+apps/admin-ui/lib/migration/.env
+apps/admin-ui/lib/migration/.env.local
+apps/admin-ui/.env
+apps/admin-ui/.env.local
+apps/admin-ui/.env.*.local
+
+# Build outputs
+.next
+out
+dist
+build
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Cursor
+.cursor/rules/*.mdc
+.cursor/rules/*.md
+.cursor/agents/*.md
+
+# History
+.history/
