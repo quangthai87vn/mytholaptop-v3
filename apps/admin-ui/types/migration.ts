@@ -129,6 +129,7 @@ export interface MedusaProduct {
   title: string;
   subtitle?: string;
   description: string;
+  short_description?: string;
   handle?: string;
   status?: "draft" | "published" | "proposed" | "rejected";
   thumbnail?: string;
@@ -224,6 +225,7 @@ export type MigrationPhase =
   | "transforming"
   | "uploading_categories"
   | "uploading"
+  | "media_migration"
   | "done"
   | "failed"
   | "rolling_back"
@@ -498,9 +500,25 @@ export interface PreviewValidation {
 export interface MigrationOptions {
   selectedTypes: MigrationDataType[];
   conflictStrategy: ConflictStrategy;
-  migrationMode: MigrationMode; // "continue" = resume from checkpoint, "restart" = clear & migrate fresh
-  allowDelete: boolean;
+  migrationMode: MigrationMode;
+  /** @deprecated No longer used — clear data is always implicit before migration */
+  allowDelete?: never;
   batchSize: number;
   skipOnError: boolean;
-  preserveImages: boolean; // Keep WooCommerce URLs vs upload to Medusa
+  /** @deprecated Use mediaOptions instead */
+  preserveImages: boolean;
+  /** Media migration options */
+  mediaOptions?: {
+    downloadThumbnails?: boolean;
+    downloadGallery?: boolean;
+    downloadCategoryImages?: boolean;
+    downloadDescriptionImages?: boolean;
+    downloadShortDescImages?: boolean;
+    rewriteHtmlDescriptions?: boolean;
+    reuseExistingMedia?: boolean;
+    /** When true: migrate each product WITH its images inline (synchronous).
+     * When false: batch migrate images after all products are created.
+     * Default: false */
+    inlineProductMedia?: boolean;
+  };
 }

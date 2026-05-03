@@ -53,7 +53,6 @@ interface MigrationProgressComponentProps {
   onStart: () => void;
   onCancel: () => void;
   onRollback: () => void;
-  allowDelete: boolean;
   isConnected: boolean;
   hasExistingMapping?: boolean;
 }
@@ -66,7 +65,6 @@ export function MigrationProgressComponent({
   onStart,
   onCancel,
   onRollback,
-  allowDelete,
   isConnected,
 }: MigrationProgressComponentProps) {
   const phaseIndex = PHASE_STEPS.findIndex((p) => p.id === progress.phase);
@@ -326,7 +324,7 @@ export function MigrationProgressComponent({
                     Chạy lại Migration
                   </Button>
                 )}
-                {(progress.phase === "rollback_failed" || progress.phase === "done" || progress.phase === "failed") && allowDelete && (
+                {(progress.phase === "rollback_failed" || progress.phase === "done" || progress.phase === "failed") && (
                   <Button
                     className="w-full"
                     variant="destructive"

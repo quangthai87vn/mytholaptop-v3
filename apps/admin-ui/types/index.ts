@@ -206,3 +206,5 @@ export interface Settings {
 // ============================================================
 
 export * from "./migration";
+// Note: media-mapping types are imported directly from @/types/media-mapping where needed
+// to avoid naming conflicts with migration.ts

@@ -216,11 +216,13 @@ export async function batchCreateCategories(
   config: MedusaConfig,
   categories: MedusaCategory[],
   parentIdMap: Record<number, string> = {}
-): Promise<MedusaApiResponse<MedusaBatchResponse & { ids: string[] }>> {
+): Promise<MedusaApiResponse<MedusaBatchResponse & { ids: string[]; wooIdToMedusaId: Record<string, string> }>> {
   const ids: string[] = [];
   let created = 0;
   let updated = 0;
   const errors: Array<{ index: number; message: string; categoryName?: string }> = [];
+
+  const wooIdToMedusaId: Record<string, string> = {};
 
   for (let i = 0; i < categories.length; i++) {
     const cat = categories[i];
@@ -281,6 +283,7 @@ export async function batchCreateCategories(
           : null;
         if (thisWooId !== null && thisWooId !== undefined) {
           parentIdMap[thisWooId] = medusaId;
+          wooIdToMedusaId[String(thisWooId)] = medusaId;
         }
         updated++;
       } else {
@@ -324,6 +327,7 @@ export async function batchCreateCategories(
           : null;
         if (thisWooId !== null && thisWooId !== undefined) {
           parentIdMap[thisWooId] = medusaId;
+          wooIdToMedusaId[String(thisWooId)] = medusaId;
         }
         created++;
       } else {
@@ -358,7 +362,7 @@ export async function batchCreateCategories(
 
   return {
     success: errors.length === 0,
-    data: { created, updated, failed: errors.length, errors, ids },
+    data: { created, updated, failed: errors.length, errors, ids, wooIdToMedusaId },
   };
 }
 
@@ -854,6 +858,78 @@ export async function checkInventoryItemBySku(
         hasVariantLinks: found.hasVariantLinks,
         product: found.product,
       } : undefined,
+    },
+  };
+}
+
+/**
+ * Update inventory item quantity after product creation.
+ * Medusa v2: Inventory is managed via Inventory Module separately from product variant.
+ * After creating a product with variants, we need to update inventory_quantity on the inventory_item.
+ */
+export async function updateInventoryItemQuantity(
+  config: MedusaConfig,
+  sku: string,
+  quantity: number,
+  options?: {
+    manageInventory?: boolean;
+    allowBackorder?: boolean;
+  }
+): Promise<MedusaApiResponse<{ id: string; inventory_quantity: number }>> {
+  // First check if inventory item exists
+  const checkResult = await checkInventoryItemBySku(config, sku);
+  if (!checkResult.success || !checkResult.data?.inventoryItem) {
+    return { success: false, error: `Inventory item not found for SKU: ${sku}` };
+  }
+
+  const inventoryItemId = checkResult.data.inventoryItem.id;
+
+  const result = await medusaRequest<{
+    inventory_item: { id: string; inventory_quantity: number };
+  }>(
+    `/admin/inventory-items/${inventoryItemId}`,
+    config,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        inventory_item: {
+          manage_inventory: options?.manageInventory ?? true,
+          allow_backorder: options?.allowBackorder ?? false,
+        },
+      }),
+    }
+  );
+
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  // Update quantity via separate endpoint
+  const levelResult = await medusaRequest<{
+    inventory_level: { id: string; stocked_quantity: number };
+  }>(
+    `/admin/inventory-items/${inventoryItemId}/levels`,
+    config,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location_id: "", // Use default location
+        stocked_quantity: quantity,
+      }),
+    }
+  );
+
+  if (!levelResult.success) {
+    return { success: false, error: levelResult.error };
+  }
+
+  return {
+    success: true,
+    data: {
+      id: inventoryItemId,
+      inventory_quantity: levelResult.data?.inventory_level?.stocked_quantity ?? quantity,
     },
   };
 }

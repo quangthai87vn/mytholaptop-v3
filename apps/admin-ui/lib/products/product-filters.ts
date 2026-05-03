@@ -1,4 +1,5 @@
 import type { MedusaProduct } from "@/services/medusa-types";
+import type { CategoryNode } from "@/components/categories/category-tree";
 
 export type StockStatus = "instock" | "outofstock" | "onbackorder" | "unknown" | "all";
 export type ProductStatus = "draft" | "published" | "proposed" | "rejected" | "archived" | "all";
@@ -77,15 +78,22 @@ export function getStockStatus(
   let stockValue: number;
   let stockStatus: StockStatus = "unknown";
 
+  // Ưu tiên 1: Medusa native inventory_quantity (stock do Medusa quản lý)
   if (medusaInventoryQty !== null && medusaInventoryQty !== undefined) {
     stockValue = medusaInventoryQty;
     stockStatus = medusaInventoryQty > 0 ? "instock" : "outofstock";
-  } else if (wooManageStock && wooStockQty !== null && !isNaN(wooStockQty)) {
+  }
+  // Ưu tiên 2: WooCommerce manage stock với stock_quantity cụ thể
+  else if (wooManageStock && wooStockQty !== null && !isNaN(wooStockQty)) {
     stockValue = wooStockQty;
     stockStatus = wooStockQty > 0 ? "instock" : "outofstock";
-  } else {
+  }
+  // Fallback 3: Dùng trực tiếp WooCommerce stock_status
+  else {
     stockValue = 999;
-    stockStatus = wooStockStatus;
+    stockStatus = wooStockStatus === "outofstock" ? "outofstock"
+      : wooStockStatus === "onbackorder" ? "onbackorder"
+      : "instock";
   }
 
   return { stock: stockValue, stockStatus };

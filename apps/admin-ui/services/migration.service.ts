@@ -79,6 +79,98 @@ import {
   sortCategoriesByHierarchy,
 } from "@/lib/transform";
 
+import { mediaMigrationService, type MediaMigrationContext } from "./media-migration.service";
+import type { MediaMigrationOptions } from "@/types/media-mapping";
+
+// ============================================================
+// HELPER: Migrate single product WITH media (synchronous)
+// ============================================================
+
+/**
+ * Download and upload all images for a single product.
+ * Returns product data with uploaded image URLs.
+ */
+async function migrateProductImagesInline(
+  wooProduct: WooProduct,
+  mediaOptions: MediaMigrationOptions,
+  wordpressBaseUrl: string,
+  medusaBackendUrl: string,
+  onLog: MigrationCallback
+): Promise<{
+  thumbnail: string | undefined;
+  images: Array<{ url: string }>;
+  description: string;
+  shortDescription: string;
+}> {
+  const thumbnailUrl = wooProduct.images?.[0]?.src || "";
+  const galleryUrls = wooProduct.images?.slice(1).map((img) => img.src) || [];
+
+  let thumbnail: string | undefined;
+  let images: Array<{ url: string }> = [];
+  let description = wooProduct.description || "";
+  let shortDescription = wooProduct.short_description || "";
+
+  // Download and upload thumbnail
+  if (thumbnailUrl && mediaOptions.downloadThumbnails) {
+    try {
+      // Fetch via proxy to avoid CORS
+      const proxyUrl = `/api/fetch-image?url=${encodeURIComponent(thumbnailUrl)}`;
+      const response = await fetch(proxyUrl);
+      if (response.ok) {
+        const blob = await response.blob();
+        const fileName = thumbnailUrl.split("/").pop() || "thumbnail.jpg";
+
+        // Upload to media endpoint
+        const formData = new FormData();
+        formData.append("file", blob, fileName);
+        formData.append("destinationPath", `products/thumbnails/${Date.now()}_${fileName}`);
+
+        const uploadResponse = await fetch("/api/medusa/upload-media", { method: "POST", body: formData });
+        if (uploadResponse.ok) {
+          const result = await uploadResponse.json();
+          if (result.success && result.url) {
+            thumbnail = result.url;
+            log(onLog, "migrate_products", "info", `Thumbnail uploaded: ${fileName}`);
+          }
+        }
+      }
+    } catch (err) {
+      log(onLog, "migrate_products", "warn", `Failed to upload thumbnail: ${err instanceof Error ? err.message : "Unknown"}`);
+    }
+  }
+
+  // Download and upload gallery images
+  if (galleryUrls.length > 0 && mediaOptions.downloadGallery) {
+    images = [];
+    for (const url of galleryUrls) {
+      try {
+        const proxyUrl = `/api/fetch-image?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+        if (response.ok) {
+          const blob = await response.blob();
+          const fileName = url.split("/").pop() || "image.jpg";
+
+          const formData = new FormData();
+          formData.append("file", blob, fileName);
+          formData.append("destinationPath", `products/gallery/${Date.now()}_${fileName}`);
+
+          const uploadResponse = await fetch("/api/medusa/upload-media", { method: "POST", body: formData });
+          if (uploadResponse.ok) {
+            const result = await uploadResponse.json();
+            if (result.success && result.url) {
+              images.push({ url: result.url });
+            }
+          }
+        }
+      } catch (err) {
+        log(onLog, "migrate_products", "warn", `Failed to upload gallery image: ${err instanceof Error ? err.message : "Unknown"}`);
+      }
+    }
+  }
+
+  return { thumbnail, images, description, shortDescription };
+}
+
 // ============================================================
 // MIGRATION PIPELINE
 // ============================================================
@@ -350,11 +442,12 @@ export async function runMigration(
       return { success: false, stats, mapping };
     }
 
-    // Reset mapping sau khi xoá
+    // Reset mapping sau khi xoá và LƯU NGAY để tránh stale data
     mapping.categories = {};
     mapping.products = {};
     mapping.images = {};
     mapping.tags = {};
+    saveIdMapping(mapping);
   }
 
   // === PHASE 1: FETCH CATEGORIES ===
@@ -414,16 +507,14 @@ export async function runMigration(
       const batchResult = await batchCreateCategories(medusaConfig, chunk, catMapping);
 
       if (batchResult.success && batchResult.data) {
-        batchResult.data.ids.forEach((medusaId, idx) => {
-          if (idx < chunk.length) {
-            const wooIdStr = chunk[idx].metadata?.originalId;
-            if (wooIdStr) {
-              const wooIdNum = parseInt(wooIdStr, 10);
-              catMapping[wooIdNum] = medusaId;
-              mapping.categories[wooIdNum] = medusaId;
-            }
+        // Use wooIdToMedusaId for accurate mapping (avoid index mismatch when items are skipped)
+        if (batchResult.data.wooIdToMedusaId) {
+          for (const [wooIdStr, medusaId] of Object.entries(batchResult.data.wooIdToMedusaId)) {
+            const wooIdNum = parseInt(wooIdStr, 10);
+            catMapping[wooIdNum] = medusaId;
+            mapping.categories[wooIdNum] = medusaId;
           }
-        });
+        }
         stats.migratedCategories += batchResult.data.created + batchResult.data.updated;
         progress.successCount = stats.migratedCategories;
         progress.processedItems = stats.migratedCategories;
@@ -472,9 +563,83 @@ export async function runMigration(
     }
 
     saveIdMapping(mapping);
+
+    // === CATEGORY MEDIA MIGRATION ===
+    if (!options.preserveImages && options.mediaOptions?.downloadCategoryImages) {
+      const mediaOpts = options.mediaOptions as MediaMigrationOptions;
+      const mediaPool = mediaMigrationService.loadPool();
+
+      const mediaContext: MediaMigrationContext = {
+        wordpressBaseUrl: config.wordpressUrl,
+        medusaBackendUrl: config.medusaBackendUrl,
+        jobId: `migration_${Date.now()}`,
+        onLog: (msg, type) => {
+          log(
+            onLog,
+            "media_category",
+            type === "info" ? "info" : type === "error" ? "error" : type === "warn" ? "warning" : "success",
+            msg
+          );
+        },
+      };
+
+      let categoryImagesDownloaded = 0;
+      let categoryImagesFailed = 0;
+
+      for (const cat of categories) {
+        if (!cat.image?.src) continue;
+
+        const catMedusaId = mapping.categories[cat.id];
+        if (!catMedusaId) continue;
+
+        try {
+          const result = await mediaMigrationService.migrateCategoryMedia(
+            cat,
+            mediaPool,
+            mediaContext,
+            mediaOpts
+          );
+
+          if (result.downloads.length > 0) {
+            const hasFailed = result.downloads.some((d) => d.status === "failed");
+            if (hasFailed) {
+              categoryImagesFailed += result.downloads.filter((d) => d.status === "failed").length;
+            } else {
+              categoryImagesDownloaded += result.downloads.filter(
+                (d) => d.status === "downloaded" || d.status === "reused"
+              ).length;
+            }
+
+            // Update category metadata with image info
+            if (result.categoryData.metadata) {
+              await import("./medusa.service").then(({ updateCategory }) =>
+                updateCategory(medusaConfig, catMedusaId, {
+                  metadata: result.categoryData.metadata,
+                } as Parameters<typeof updateCategory>[2])
+              );
+            }
+          }
+        } catch (err) {
+          categoryImagesFailed++;
+          debug(`[CategoryMedia] Error for category ${cat.id}:`, err);
+        }
+      }
+
+      mediaMigrationService.savePool(mediaPool);
+
+      if (categoryImagesDownloaded > 0 || categoryImagesFailed > 0) {
+        log(
+          onLog,
+          "media_category",
+          categoryImagesFailed === 0 ? "success" : "warning",
+          `Danh mục images: ${categoryImagesDownloaded} downloaded, ${categoryImagesFailed} failed`
+        );
+      }
+    }
   }
 
   // === PHASE 2: FETCH PRODUCTS ===
+  let fetchedProducts: WooProduct[] = [];
   if (options.selectedTypes.includes("products")) {
     log(onLog, "fetch_products", "info", "Bắt đầu lấy sản phẩm từ WooCommerce...");
 
@@ -486,7 +651,7 @@ export async function runMigration(
       return { success: false, stats, mapping };
     }
 
-    const { products: fetchedProducts } = prodResult.data;
+    fetchedProducts = prodResult.data.products;
     debug("fetchProducts: WooCommerce returned", fetchedProducts.length, "products");
     stats.totalProducts = fetchedProducts.length;
     log(onLog, "fetch_products", "success", `Lấy được ${fetchedProducts.length} sản phẩm`);
@@ -537,7 +702,7 @@ export async function runMigration(
       onProgress(progress);
 
       // Check for existing products based on conflict strategy
-      const processedProducts: Array<{ medusa: MedusaProduct; wooId: number }> = [];
+      const processedProducts: Array<{ medusa: MedusaProduct; wooId: number; wooProduct?: WooProduct }> = [];
 
       for (let j = 0; j < chunk.length; j++) {
         const item = chunk[j];
@@ -645,7 +810,9 @@ export async function runMigration(
           );
         }
 
-        processedProducts.push({ medusa: product, wooId: item.wooId });
+        // Find original WooProduct for inline media migration
+        const originalWooProduct = fetchedProducts.find(p => p.id === item.wooId);
+        processedProducts.push({ medusa: product, wooId: item.wooId, wooProduct: originalWooProduct });
       }
 
       // Batch create new products
@@ -691,16 +858,79 @@ export async function runMigration(
         debug("batchCreateProducts result:", batchResult.success, "created:", batchResult.data?.created, "failed:", batchResult.data?.failed);
 
         if (batchResult.success && batchResult.data) {
+          // Check if inline media migration is enabled
+          const inlineMedia = options.mediaOptions?.inlineProductMedia ?? false;
+
+          // Update inventory for each successfully created product
           for (const [idx, medusaId] of batchResult.data.ids.entries()) {
             if (idx < processedProducts.length) {
               const originalProduct = processedProducts[idx].medusa;
               const wooId = processedProducts[idx].wooId;
+              const wooProduct = fetchedProducts.find(p => p.id === wooId);
               mapping.products[wooId] = medusaId;
               stats.migratedProducts++;
               progress.successCount = stats.migratedProducts;
 
+              // === INLINE MEDIA MIGRATION ===
+              // Download and upload images for this product BEFORE logging success
+              if (inlineMedia && processedProducts[idx].wooProduct && options.mediaOptions) {
+                try {
+                  log(onLog, "migrate_products", "info", `[${globalIndex - processedProducts.length + idx + 1}] Đang tải ảnh cho: ${originalProduct.title}`);
+
+                  const mediaResult = await migrateProductImagesInline(
+                    processedProducts[idx].wooProduct!,
+                    options.mediaOptions,
+                    wooConfig.wordpressUrl,
+                    medusaConfig.backendUrl,
+                    onLog
+                  );
+
+                  // If images were downloaded, update product with new URLs
+                  if (mediaResult.thumbnail || mediaResult.images.length > 0) {
+                    const updatePayload: Partial<MedusaProduct> = {
+                      thumbnail: mediaResult.thumbnail,
+                      images: mediaResult.images.length > 0 ? mediaResult.images : undefined,
+                    };
+
+                    const mediaUpdateResult = await updateProduct(medusaConfig, medusaId, updatePayload);
+                    if (mediaUpdateResult.success) {
+                      log(onLog, "migrate_products", "success", `[${globalIndex - processedProducts.length + idx + 1}] Đã tải ảnh xong: ${originalProduct.title}`);
+                    } else {
+                      log(onLog, "migrate_products", "warn", `[${globalIndex - processedProducts.length + idx + 1}] Tải ảnh thất bại: ${mediaUpdateResult.error}`);
+                    }
+                  }
+                } catch (mediaErr) {
+                  log(onLog, "migrate_products", "warn", `[${globalIndex - processedProducts.length + idx + 1}] Lỗi media: ${mediaErr instanceof Error ? mediaErr.message : "Unknown"}`);
+                }
+              }
+              // === END INLINE MEDIA MIGRATION ===
+
+              // Update inventory via Medusa Inventory Module (Medusa v2)
               if (originalProduct.variants) {
                 stats.migratedVariants += originalProduct.variants.length;
+
+                // Update inventory for first variant (primary stock)
+                const firstVariant = originalProduct.variants[0];
+                if (firstVariant?.sku && firstVariant.inventory_quantity !== undefined) {
+                  // Import the update function dynamically to avoid circular dependency
+                  try {
+                    const { updateInventoryItemQuantity } = await import("./medusa.service");
+                    const invResult = await updateInventoryItemQuantity(
+                      medusaConfig,
+                      firstVariant.sku,
+                      firstVariant.inventory_quantity,
+                      {
+                        manageInventory: firstVariant.manage_inventory ?? true,
+                        allowBackorder: false,
+                      }
+                    );
+                    if (!invResult.success) {
+                      console.debug(`[Migration] Failed to update inventory for SKU ${firstVariant.sku}:`, invResult.error);
+                    }
+                  } catch (invErr) {
+                    console.debug(`[Migration] Inventory update error for SKU ${firstVariant.sku}:`, invErr);
+                  }
+                }
               }
 
               log(
@@ -769,6 +999,94 @@ export async function runMigration(
         `Sản phẩm ID ${f.wooId} transform lỗi: ${f.errors.map((e) => e.message).join(", ")}`
       );
     });
+  }
+
+  // ============================================================
+  // PHASE: MEDIA MIGRATION
+  // Chỉ chạy nếu preserveImages = false (tải ảnh về Medusa)
+  // ============================================================
+  if (options.selectedTypes.includes("products") && !options.preserveImages && options.mediaOptions) {
+    const mediaOpts = options.mediaOptions as MediaMigrationOptions;
+    const hasMediaWork = mediaOpts.downloadThumbnails ||
+      mediaOpts.downloadGallery ||
+      mediaOpts.downloadDescriptionImages ||
+      mediaOpts.downloadShortDescImages ||
+      mediaOpts.rewriteHtmlDescriptions;
+
+    if (hasMediaWork) {
+      log(
+        onLog,
+        "media_migration",
+        "info",
+        "Bắt đầu migration media: tải ảnh từ WordPress về Medusa..."
+      );
+
+      progress.phase = "media_migration";
+      progress.totalItems = fetchedProducts.length;
+      progress.processedItems = 0;
+      onProgress(progress);
+
+      // Load existing media pool (for reuse across products)
+      const mediaPool = mediaMigrationService.loadPool();
+
+      const mediaContext: MediaMigrationContext = {
+        wordpressBaseUrl: config.wordpressUrl,
+        medusaBackendUrl: config.medusaBackendUrl,
+        jobId: `migration_${Date.now()}`,
+        onLog: (msg, type, detail) => {
+          log(
+            onLog,
+            "media_migration",
+            type === "info" ? "info" : type === "error" ? "error" : type === "warn" ? "warning" : "success",
+            msg
+          );
+        },
+      };
+
+      // Build wooId → medusaId mapping for media-only updates
+      const existingProductIds: Record<number, string> = {};
+      for (const [wooIdStr, medusaId] of Object.entries(mapping.products)) {
+        existingProductIds[parseInt(wooIdStr, 10)] = medusaId;
+      }
+
+      const mediaResult = await mediaMigrationService.runMediaOnlyMigration(
+        fetchedProducts,
+        mediaPool,
+        mediaContext,
+        mediaOpts,
+        existingProductIds,
+        async (medusaProductId, wooId, updates) => {
+          try {
+            const result = await updateProduct(medusaConfig, medusaProductId, updates);
+            return { success: result.success, error: result.error };
+          } catch (err) {
+            return {
+              success: false,
+              error: err instanceof Error ? err.message : "Unknown error",
+            };
+          }
+        }
+      );
+
+      // Save updated media pool
+      mediaMigrationService.savePool(mediaPool);
+
+      // Log media stats
+      log(
+        onLog,
+        "media_migration",
+        mediaResult.stats.failed === 0 ? "success" : "warning",
+        `Media migration hoàn tất: ${mediaResult.updatedProducts} sản phẩm | ` +
+        `Downloaded: ${mediaResult.stats.downloaded} | Reused: ${mediaResult.stats.reused} | ` +
+        `Failed: ${mediaResult.stats.failed}`
+      );
+
+      if (mediaResult.stats.warnings.length > 0) {
+        mediaResult.stats.warnings.slice(0, 5).forEach((w) => {
+          log(onLog, "media_migration", "warning", `Cảnh báo: ${w}`);
+        });
+      }
+    }
   }
 
   // === DONE ===

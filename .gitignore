@@ -6,6 +6,9 @@ apps/admin-ui/lib/migration/.env.local
 apps/admin-ui/.env
 apps/admin-ui/.env.local
 apps/admin-ui/.env.*.local
+apps/backend-ui/.env
+apps/backend-ui/.env.local
+apps/backend-ui/.env.*.local
 
 # Build outputs
 .next
@@ -29,10 +32,19 @@ Thumbs.db
 *.swp
 *.swo
 
-# Cursor
-.cursor/rules/*.mdc
-.cursor/rules/*.md
-.cursor/agents/*.md
+# Cursor (all AI agent files)
+.cursor/
 
 # History
 .history/
+
+# Uploaded media (migrated from WordPress)
+apps/admin-ui/public/wp-content/uploads/
+apps/admin-ui/public/uploads/
+
+# Duplicate/unused folders (do not commit)
+apps/admin-ui/apps/
+apps/apps/
+
+# Docker configs with secrets (local development only)
+docker-compose.yml

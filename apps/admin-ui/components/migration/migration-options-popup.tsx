@@ -19,50 +19,26 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { MigrationDataType, ConflictStrategy } from "@/types";
+import type { MediaMigrationOptions } from "@/types/media-mapping";
 
 const DATA_TYPE_OPTIONS: Array<{ id: MigrationDataType; label: string; description: string }> = [
   { id: "categories", label: "Danh mục sản phẩm", description: "Chuyển toàn bộ danh mục" },
-  { id: "products", label: "Sản phẩm", description: "Chuyển thông tin sản phẩm" },
-  { id: "mainImage", label: "Hình ảnh chính", description: "Hình đại diện sản phẩm" },
-  { id: "gallery", label: "Thư viện ảnh", description: "Tất cả hình trong gallery" },
-  { id: "shortDesc", label: "Mô tả ngắn", description: "Trường short description" },
-  { id: "longDesc", label: "Mô tả dài", description: "Trường description đầy đủ" },
-  { id: "variants", label: "Biến thể sản phẩm", description: "Các biến thể (màu sắc, kích thước...)" },
-  { id: "inventory", label: "Tồn kho", description: "Số lượng tồn kho hiện tại" },
-  { id: "tags", label: "Thẻ đánh dấu (Tags)", description: "Di chuyển tags để tối ưu SEO" },
-];
-
-const CONFLICT_OPTIONS: Array<{ id: ConflictStrategy; label: string; description: string }> = [
-  {
-    id: "skip",
-    label: "Bỏ qua nếu trùng SKU",
-    description: "Giữ nguyên sản phẩm đã có trong Medusa",
-  },
-  {
-    id: "update",
-    label: "Cập nhật nếu trùng SKU",
-    description: "Ghi đè thông tin sản phẩm đã tồn tại",
-  },
-  {
-    id: "create",
-    label: "Tạo mới (xoá dữ liệu cũ)",
-    description: "Xoá toàn bộ dữ liệu cũ, tạo mới hoàn toàn từ đầu",
-  },
+  { id: "products", label: "Sản phẩm", description: "Chuyển thông tin sản phẩm, hình ảnh, biến thể, tồn kho, tags" },
 ];
 
 interface MigrationOptionsPopupProps {
   selectedTypes: MigrationDataType[];
   conflictStrategy: ConflictStrategy;
-  allowDelete: boolean;
   batchSize: number;
   skipOnError: boolean;
   preserveImages: boolean;
+  mediaOptions: MediaMigrationOptions;
   onTypeToggle: (type: MigrationDataType) => void;
   onConflictChange: (strategy: ConflictStrategy) => void;
-  onAllowDeleteChange: (v: boolean) => void;
   onBatchSizeChange: (v: number) => void;
   onSkipOnErrorChange: (v: boolean) => void;
   onPreserveImagesChange: (v: boolean) => void;
+  onMediaOptionsChange: (opts: MediaMigrationOptions) => void;
   onClearAll?: () => void;
   isRunning?: boolean;
 }
@@ -70,16 +46,16 @@ interface MigrationOptionsPopupProps {
 export function MigrationOptionsPopup({
   selectedTypes,
   conflictStrategy,
-  allowDelete,
   batchSize,
   skipOnError,
   preserveImages,
+  mediaOptions,
   onTypeToggle,
   onConflictChange,
-  onAllowDeleteChange,
   onBatchSizeChange,
   onSkipOnErrorChange,
   onPreserveImagesChange,
+  onMediaOptionsChange,
   isRunning,
 }: MigrationOptionsPopupProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -164,38 +140,6 @@ export function MigrationOptionsPopup({
 
             <Separator />
 
-            {/* Tuỳ chọn chống trùng dữ liệu */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Tuỳ chọn chống trùng dữ liệu</h3>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {CONFLICT_OPTIONS.map((option) => (
-                  <label
-                    key={option.id}
-                    className={cn(
-                      "flex items-start gap-2 rounded-lg border p-3 cursor-pointer transition-all hover:bg-accent text-center justify-center",
-                      conflictStrategy === option.id
-                        ? "border-primary bg-primary/5"
-                        : "border-muted"
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      name="conflict-popup"
-                      value={option.id}
-                      checked={conflictStrategy === option.id}
-                      onChange={() => onConflictChange(option.id)}
-                      className="accent-primary mt-0.5"
-                    />
-                    <div>
-                      <p className="text-sm font-medium">{option.label}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <Separator />
-
             {/* Tuỳ chọn nâng cao */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold">Tuỳ chọn nâng cao</h3>
@@ -234,27 +178,77 @@ export function MigrationOptionsPopup({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="text-sm font-medium">Giữ nguyên URL ảnh</p>
-                    <p className="text-xs text-muted-foreground">Dùng URL gốc từ WooCommerce</p>
+                {/* 2 checkbox độc lập - "Tải ảnh về Medusa" ưu tiên default */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between rounded-lg border border-primary/50 bg-primary/5 p-3">
+                    <div>
+                      <p className="text-sm font-medium">Tải ảnh về Medusa</p>
+                      <p className="text-xs text-muted-foreground">Tải ảnh từ WooCommerce về server Medusa</p>
+                    </div>
+                    <Checkbox
+                      checked={!preserveImages}
+                      onCheckedChange={(v) => {
+                        const newVal = !!v;
+                        onPreserveImagesChange(!newVal);
+                      }}
+                    />
                   </div>
-                  <Checkbox
-                    checked={preserveImages}
-                    onCheckedChange={(v) => onPreserveImagesChange(!!v)}
-                  />
+
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <p className="text-sm font-medium">Giữ nguyên URL ảnh</p>
+                      <p className="text-xs text-muted-foreground">Dùng URL gốc từ WooCommerce</p>
+                    </div>
+                    <Checkbox
+                      checked={preserveImages}
+                      onCheckedChange={(v) => {
+                        const newVal = !!v;
+                        onPreserveImagesChange(newVal);
+                      }}
+                    />
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg border border-destructive/30 p-3">
-                  <div>
-                    <p className="text-sm font-medium text-destructive">Cho phép xoá dữ liệu</p>
-                    <p className="text-xs text-muted-foreground">Bật tuỳ chọn rollback trong trang chính</p>
+                {/* Sub-options for download - chỉ hiện khi "Tải ảnh về Medusa" được chọn */}
+                {!preserveImages && (
+                  <div className="ml-6 space-y-2 rounded-lg border p-3 bg-muted/30">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Tuỳ chọn tải ảnh:</p>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="inline-media"
+                        checked={mediaOptions.inlineProductMedia ?? true}
+                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, inlineProductMedia: !!v })}
+                      />
+                      <label htmlFor="inline-media" className="text-xs cursor-pointer font-medium">
+                        Tải ảnh đồng bộ (từng sản phẩm + ảnh xong rồi mới qua sản phẩm kế tiếp)
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="download-thumbnails"
+                        checked={mediaOptions.downloadThumbnails}
+                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, downloadThumbnails: !!v })}
+                      />
+                      <label htmlFor="download-thumbnails" className="text-xs cursor-pointer">Tải ảnh chính (thumbnail)</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="download-gallery"
+                        checked={mediaOptions.downloadGallery}
+                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, downloadGallery: !!v })}
+                      />
+                      <label htmlFor="download-gallery" className="text-xs cursor-pointer">Tải ảnh gallery</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="download-category"
+                        checked={mediaOptions.downloadCategoryImages}
+                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, downloadCategoryImages: !!v })}
+                      />
+                      <label htmlFor="download-category" className="text-xs cursor-pointer">Tải ảnh danh mục</label>
+                    </div>
                   </div>
-                  <Checkbox
-                    checked={allowDelete}
-                    onCheckedChange={(v) => onAllowDeleteChange(!!v)}
-                  />
-                </div>
+                )}
               </div>
             </div>
           </div>

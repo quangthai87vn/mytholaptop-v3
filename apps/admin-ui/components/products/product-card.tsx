@@ -18,7 +18,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatCurrency } from "@/lib/utils";
+import {
+  formatCurrency,
+  cn,
+} from "@/lib/utils";
 import {
   getStockBadgeVariant,
   getStatusVariant,
@@ -42,7 +45,10 @@ export function ProductCard({ product, onView, onDelete }: ProductCardProps) {
     <Card className="group overflow-hidden transition-all hover:shadow-lg hover:border-primary/30">
       {/* Image */}
       <div
-        className="relative aspect-square overflow-hidden bg-muted cursor-pointer"
+        className={cn(
+          "relative aspect-square overflow-hidden bg-muted cursor-pointer",
+          (product.stockStatus === "outofstock" || product.stock === 0) && "grayscale"
+        )}
         onClick={() => onView(product)}
       >
         {product.image ? (
@@ -50,7 +56,10 @@ export function ProductCard({ product, onView, onDelete }: ProductCardProps) {
             src={product.image}
             alt={product.name}
             fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            className={cn(
+              "object-cover transition-transform duration-300 group-hover:scale-105",
+              (product.stockStatus === "outofstock" || product.stock === 0) && "grayscale"
+            )}
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           />
         ) : (

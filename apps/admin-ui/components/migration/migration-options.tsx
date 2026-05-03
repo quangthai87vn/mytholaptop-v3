@@ -1,13 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle, Trash2, RotateCcw, AlertTriangle, RefreshCw, Loader2 } from "lucide-react";
+import { CheckCircle, Trash2, RotateCcw, AlertTriangle, RefreshCw, Loader2, ImageIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { MigrationDataType, ConflictStrategy, MigrationMode } from "@/types";
+import type {
+  MigrationDataType,
+  ConflictStrategy,
+  MigrationMode,
+} from "@/types";
+import type { MediaMigrationOptions } from "@/types/media-mapping";
 
 const DATA_TYPE_OPTIONS: Array<{ id: MigrationDataType; label: string; description: string }> = [
   { id: "categories", label: "Danh mục sản phẩm", description: "Chuyển toàn bộ danh mục" },
@@ -47,6 +53,7 @@ interface MigrationOptionsProps {
   batchSize: number;
   skipOnError: boolean;
   preserveImages: boolean;
+  mediaOptions: MediaMigrationOptions;
   onTypeToggle: (type: MigrationDataType) => void;
   onConflictChange: (strategy: ConflictStrategy) => void;
   onMigrationModeChange: (mode: MigrationMode) => void;
@@ -54,6 +61,7 @@ interface MigrationOptionsProps {
   onBatchSizeChange: (v: number) => void;
   onSkipOnErrorChange: (v: boolean) => void;
   onPreserveImagesChange: (v: boolean) => void;
+  onMediaOptionsChange: (opts: MediaMigrationOptions) => void;
   onClearAll?: () => void;
   isRunning?: boolean;
 }
@@ -66,6 +74,7 @@ export function MigrationOptions({
   batchSize,
   skipOnError,
   preserveImages,
+  mediaOptions,
   onTypeToggle,
   onConflictChange,
   onMigrationModeChange,
@@ -73,6 +82,7 @@ export function MigrationOptions({
   onBatchSizeChange,
   onSkipOnErrorChange,
   onPreserveImagesChange,
+  onMediaOptionsChange,
   onClearAll,
   isRunning,
 }: MigrationOptionsProps) {
@@ -248,18 +258,75 @@ export function MigrationOptions({
               onCheckedChange={(v) => onSkipOnErrorChange(!!v)}
             />
           </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Giữ nguyên URL ảnh</p>
-              <p className="text-xs text-muted-foreground">
-                Không upload ảnh lên Medusa, dùng URL gốc từ WooCommerce
-              </p>
+
+          {/* Media Migration Options */}
+          <div className="space-y-3 pt-1 border-t mt-2">
+            <div className="flex items-center gap-2">
+              <ImageIcon className="size-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Tải ảnh về Medusa</p>
+              <Badge variant="outline" className="text-xs ml-auto">Mới</Badge>
             </div>
-            <Checkbox
-              checked={preserveImages}
-              onCheckedChange={(v) => onPreserveImagesChange(!!v)}
-            />
+
+            {/* Primary toggle: download to Medusa vs keep original URLs */}
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <Checkbox
+                  checked={!preserveImages}
+                  onCheckedChange={(v) => onPreserveImagesChange(!v)}
+                />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">
+                    Tải ảnh về server Medusa
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    Download ảnh từ WordPress, lưu vào backend, dùng relative path. Không phụ thuộc WordPress cũ.
+                  </p>
+                </div>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <Checkbox
+                  checked={preserveImages}
+                  onCheckedChange={(v) => onPreserveImagesChange(!!v)}
+                />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">Giữ nguyên URL gốc</p>
+                  <p className="text-xs text-blue-700">
+                    Dùng URL từ WooCommerce, không tải về. Ảnh vẫn phụ thuộc WordPress cũ.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Granular options - show only when downloading to Medusa */}
+            {preserveImages === false && (
+              <div className="space-y-2 pl-2 border-l-2 border-blue-200">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Chi tiết</p>
+                {([
+                  { key: "downloadThumbnails" as const, label: "Ảnh đại diện (thumbnail)", desc: "Hình đại diện chính của sản phẩm" },
+                  { key: "downloadGallery" as const, label: "Ảnh thư viện (gallery)", desc: "Tất cả hình trong gallery sản phẩm" },
+                  { key: "downloadCategoryImages" as const, label: "Ảnh danh mục", desc: "Hình minh hoạ cho danh mục sản phẩm" },
+                  { key: "downloadDescriptionImages" as const, label: "Ảnh trong mô tả dài", desc: "Hình ảnh nhúng trong description sản phẩm" },
+                  { key: "downloadShortDescImages" as const, label: "Ảnh trong mô tả ngắn", desc: "Hình ảnh nhúng trong short_description" },
+                  { key: "rewriteHtmlDescriptions" as const, label: "Rewrite HTML mô tả", desc: "Thay link ảnh WordPress bằng relative path mới" },
+                  { key: "reuseExistingMedia" as const, label: "Reuse ảnh đã tải trước", desc: "Nếu URL đã tải rồi thì dùng lại, không tải lại" },
+                ] as const).map(({ key, label, desc }) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm">{label}</p>
+                      <p className="text-xs text-muted-foreground">{desc}</p>
+                    </div>
+                    <Checkbox
+                      checked={mediaOptions[key]}
+                      onCheckedChange={(v) =>
+                        onMediaOptionsChange({ ...mediaOptions, [key]: !!v })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-destructive">Cho phép xoá dữ liệu đã migrate</p>

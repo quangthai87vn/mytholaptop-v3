@@ -13,6 +13,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
 import type { WooCategory, WooProduct } from "@/types";
+import { cn } from "@/lib/utils";
 
 interface MigrationPreviewProps {
   categories: WooCategory[];
@@ -76,6 +77,7 @@ export function MigrationPreview({
   const [currentPage, setCurrentPage] = useState(1);
   const [galleryProduct, setGalleryProduct] = useState<WooProduct | null>(null);
   const [expandedCats, setExpandedCats] = useState<Set<number>>(new Set());
+  const [stockFilter, setStockFilter] = useState<"all" | "instock" | "outofstock">("all");
   const pageSize = 24;
 
   // Build category tree
@@ -92,12 +94,20 @@ export function MigrationPreview({
     (cat) => cat.level === 0 || filteredCategoryIds.has(cat.id) || filteredCategoryIds.has(cat.parent || 0)
   );
 
-  // Filter products by search
-  const filteredProducts = products.filter(
-    (p) =>
+  // Filter products by search and stock
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.sku.toLowerCase().includes(search.toLowerCase())
-  );
+      p.sku.toLowerCase().includes(search.toLowerCase());
+    const isInStock =
+      p.stock_status === "instock" ||
+      (p.stock_quantity !== null && p.stock_quantity > 0);
+    const matchesStock =
+      stockFilter === "all" ||
+      (stockFilter === "instock" && isInStock) ||
+      (stockFilter === "outofstock" && !isInStock);
+    return matchesSearch && matchesStock;
+  });
 
   // Pagination
   const totalPages = Math.ceil(filteredProducts.length / pageSize);
@@ -257,7 +267,7 @@ export function MigrationPreview({
 
               {/* Products tab */}
               <TabsContent value="products">
-                <div className="mb-4 flex items-center justify-between gap-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="relative max-w-sm">
                     <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
@@ -267,6 +277,37 @@ export function MigrationPreview({
                       onChange={(e) => handleSearch(e.target.value)}
                     />
                   </div>
+                  {/* Stock filter */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground mr-1">Lọc:</span>
+                    <Button
+                      variant={stockFilter === "all" ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      onClick={() => setStockFilter("all")}
+                    >
+                      Tất cả
+                    </Button>
+                    <Button
+                      variant={stockFilter === "instock" ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      onClick={() => setStockFilter("instock")}
+                    >
+                      Còn hàng
+                    </Button>
+                    <Button
+                      variant={stockFilter === "outofstock" ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      onClick={() => setStockFilter("outofstock")}
+                    >
+                      Hết hàng
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mb-3 flex items-center justify-between gap-4">
                   <span className="text-sm text-muted-foreground">
                     {filteredProducts.length} sản phẩm / {totalPages} trang
                   </span>
@@ -292,13 +333,19 @@ export function MigrationPreview({
                           className="group relative flex flex-col overflow-hidden rounded-xl border bg-card text-left transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 cursor-pointer"
                         >
                           {/* Product Image */}
-                          <div className="relative aspect-square overflow-hidden bg-muted">
+                          <div className={cn(
+                            "relative aspect-square overflow-hidden bg-muted",
+                            !isInStock && "grayscale"
+                          )}>
                             {product.images?.[0]?.src ? (
                               <Image
                                 src={product.images[0].src}
                                 alt={product.name}
                                 fill
-                                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                className={cn(
+                                  "object-cover transition-transform duration-300 group-hover:scale-105",
+                                  !isInStock && "grayscale"
+                                )}
                                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                               />
                             ) : (

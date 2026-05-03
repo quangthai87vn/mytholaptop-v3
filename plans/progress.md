@@ -1,140 +1,115 @@
 # MTL Next.js Commerce - Tiến Độ Project
 
-> **Cập nhật lần cuối:** 2026-05-02 15:30 (UTC+7)
+> **Cập nhật lần cuối:** 2026-05-03 16:00 (UTC+7)
 > **Agent:** c2283fc2-94d8-422d-98ca-91fb159b20c2
+> **Task:** Migration — WordPress media structure, deduplication, overwrite on duplicate
 
 ---
 
-## Tổng Quan Task (2 May 2026)
+## Tổng Quan Task (3 May 2026 - Buổi Chiều)
 
-Task hiện tại tập trung vào: **Tích hợp Medusa Admin API cho Products page và Migration page** — kết nối admin-ui với backend Medusa.
+Task tiếp tục: **Cải thiện WordPress media migration — cấu trúc thư mục, deduplication, overwrite**
 
 ---
 
 ## 1. Đã Làm Gì
 
-### 1.1 Research (Agent: Researcher)
+### 1.1 Đổi Cấu Trúc Lưu Ảnh Sang WordPress Format
 
-**Phân tích hiện trạng:**
+**Vấn đề:** Ảnh lưu vào `uploads/migration/wordpress/media/{hash}/{filename}` không giữ nguyên URL SEO.
 
-- Đọc và phân tích 4 file chính:
-  - `apps/admin-ui/app/(admin)/products/page.tsx` — Product listing
-  - `apps/admin-ui/app/(admin)/categories/page.tsx` — Category listing
-  - `apps/admin-ui/app/api/medusa/[...slug]/route.ts` — Proxy API
-  - `apps/admin-ui/services/medusa.service.ts` — Medusa service
+**Giải pháp:** Lưu theo cấu trúc WordPress chuẩn: `wp-content/uploads/{year}/{month}/{filename}`
 
-**Phát hiện gap quan trọng:**
-
-| Gap | Mô tả |
-|-----|--------|
-| Product listing | Chưa gọi Medusa API, chỉ dùng mock data |
-| Category listing | Chưa gọi Medusa API, chỉ dùng mock data |
-| Medusa proxy | Route có sẵn nhưng cần test chi tiết |
-| Migration service | Đã gọi Medusa nhưng có bug category assignment |
-
-### 1.2 UI Design (Agent: UI Designer)
-
-**Thiết kế 3-tab Product Form Dialog:**
-
-1. **Tab Thông Tin Chung** — title, mô tả, danh mục, thẻ, hình ảnh, trạng thái
-2. **Tab Giá & Kho** — variant pricing (regular/sale), tồn kho, manage stock
-3. **Tab Nâng Cao** — weight, dimensions, SEO handle, metadata
-
-### 1.3 Implementation
-
-**Các file đã tạo mới:**
-
-| File | Mô tả |
-|------|--------|
-| `components/products/product-form-dialog.tsx` | 3-tab product edit dialog với Medusa integration |
-| `components/products/quick-actions.tsx` | Quick action buttons (view, edit, delete, sync) |
-| `components/products/product-stats.tsx` | Stats bar (tổng, published, draft, outofstock) |
-| `components/products/product-filters.tsx` | Filter bar (search, category, status, stock) |
-| `components/categories/category-tree.tsx` | Tree view với expand/collapse |
-| `components/categories/category-stats.tsx` | Category stats (total, parent, child, active) |
-| `components/categories/category-filters.tsx` | Category filter bar |
-| `app/api/woo/[...slug]/route.ts` | WooCommerce proxy API |
-| `app/api/medusa/[...slug]/route.ts` | Medusa proxy API (cải thiện) |
-| `lib/transform/index.ts` | Re-export transform utilities |
-
-**Các file đã sửa:**
+**Files sửa:**
 
 | File | Thay đổi |
-|------|----------|
-| `services/medusa.service.ts` | 16 fixes cho Medusa API response parsing, JWT auth, variant-level options |
-| `services/migration.service.ts` | Category assignment logic, product logging chi tiết, batchCreate API integration |
-| `lib/transform.ts` | Product & category transform, metadata builder |
-| `types/migration.ts` | Medusa types với categoryIds field |
-| `app/(admin)/products/page.tsx` | Gọi Medusa API, tích hợp ProductFormDialog |
-| `app/(admin)/categories/page.tsx` | Gọi Medusa API, category tree, parent-child sync |
-| `app/(admin)/migration/page.tsx` | Migration UI với feedback chi tiết |
+|------|-----------|
+| `app/api/medusa/upload-media/route.ts` | Đổi path sang `public/wp-content/uploads/{year}/{month}/{filename}`; Extract year/month từ WordPress URL gốc |
+| `lib/media-helpers.ts` | Cập nhật `buildRelativePath()` và `buildStoragePath()` |
+| `services/media-migration.service.ts` | Fix mapping để `rewriteHtmlImages()` hoạt động đúng với original URLs |
 
-**Tổng số:** ~12 file tạo mới, ~8 file sửa đổi
+**Cấu trúc mới:**
+```
+public/wp-content/uploads/{year}/{month}/{filename}
+Ví dụ: public/wp-content/uploads/2026/04/dell-inspiron-15.jpg
+```
 
-### 1.4 QA
+**Lợi ích:**
+- URL giữ nguyên: `/wp-content/uploads/2026/04/image.jpg`
+- SEO được bảo toàn
+- Khi deploy, chỉ cần copy thư mục `wp-content/uploads/` sang server
 
-- `next build` — **Passed** (0 errors)
-- `next lint` — **Passed** (0 errors)
-- Admin UI chạy tại http://localhost:3000
-- Backend Medusa chạy tại http://localhost:9000
+### 1.2 Sửa Logic Overwrite Thay Vì Tạo File Mới
+
+**Vấn đề:** Khi trùng filename, code cũ tạo file mới `{basename}-1.jpg`, gây tăng dung lượng.
+
+**Fix:** Khi file đã tồn tại → ghi đè (overwrite)
+
+**File sửa:** `app/api/medusa/upload-media/route.ts`
+
+```typescript
+// Trước: Tạo file mới nếu trùng
+if (fsSync.existsSync(absolutePath)) {
+  const newFileName = `${base}-${counter}${ext}`; // → file-1.jpg
+}
+
+// Sau: Ghi đè nếu trùng
+fsSync.writeFileSync(absolutePath, buffer); // Luôn overwrite
+```
+
+### 1.3 Fix Rewrite HTML Images Mapping
+
+**Vấn đề:** `rewriteHtmlImages()` dùng `normalizeUrl()` để match URLs, nhưng media service truyền hash keys.
+
+**Fix:** Media service build `urlToRelativePath` mapping với original URLs thay vì hashes.
+
+**File sửa:** `services/media-migration.service.ts`
+
+```typescript
+// Build URL → relativePath mapping (not hash → relativePath)
+// rewriteHtmlImages uses normalizeUrl() internally to match
+const urlToRelativePath: Record<string, string> = {};
+for (const url of allSourceUrls) {
+  const hash = this.hashSync(url);
+  const relPath = urlHashToRelativePath[hash];
+  if (relPath) {
+    urlToRelativePath[url] = relPath;
+  }
+}
+```
+
+### 1.4 Deduplication Logic (Đã Có Từ Trước)
+
+**Logic hoạt động:**
+1. Mỗi URL được hash → lưu vào global pool (`localStorage`)
+2. Khi xử lý product, check pool trước:
+   - `status === "downloaded"` → reuse, không tải lại
+   - `status === "pending"` → download mới
+3. Thumbnail + gallery + description cùng 1 URL → chỉ tải 1 lần
 
 ---
 
 ## 2. Các Vấn Đề Đã Phát Hiện và Fix
 
-### 2.1 Bug Fixes trong Medusa API
+### 2.1 Bug Fixes
 
 | # | Bug | Fix |
 |---|-----|-----|
-| 1 | `batchCreateProducts` trả về `{ product: ... }` nhưng code expect key khác | Sửa response parsing: check `"product" in result.data` |
-| 2 | `updateProduct` gửi `variants` trong payload — Medusa v2 reject | Strip variants từ update payload |
-| 3 | `batchCreateCategories` lỗi 404 endpoint sai | Đổi sang `/admin/product-categories` |
-| 4 | `findProductBySku` dùng `q=sku` — không đáng tin cậy | Đổi sang `findProductByVariantSku` với filter variant.sku |
-| 5 | JWT token tạo từ admin/token route không được dùng đúng cách | Sửa proxy để extract và pass JWT token |
-| 6 | `variant.options` gửi dạng `Array<{title, value}>` — Medusa v2 không accept | Chỉ gửi `variant.options = Record<string, string>` |
-| 7 | `inventory_quantity`, `manage_inventory`, `allow_backorder` gửi trong variant payload gây 400 | Strip khỏi API payload |
-| 8 | Error response parsing không handle nested error formats | Thêm support cho 5 Medusa error formats |
-| 9 | `batchCreateCategories` không update `parentIdMap` sau khi tạo category | Fix để children reference parents đúng |
-| 10 | `batchCreateCategories` không resolve `parent_category_id` cho child categories | Thêm logic resolve parent ID từ mapping |
-| 11 | `batchCreateCategories` gọi `findCategoryByOriginalId` cho mỗi category — rất chậm | Cache kết quả, chỉ query 1 lần |
-| 12 | `listAllCategories` không sort theo hierarchy | Sort parents trước children |
-| 13 | Product không có category sau khi migrate — endpoint `/products/{id}/categories` không tồn tại Medusa v2 | Chuyển sang gán categories trong product payload thay vì gọi riêng |
-| 14 | `assignProductCategories` function vẫn còn gọi endpoint không đúng | Giữ lại function cho reference, categories được gán qua product payload |
-| 15 | `deleteInventoryItemsBySku` dùng custom endpoint không tồn tại | Chuyển sang dùng `deleteInventoryItems` với `skus` param |
-| 16 | `transformVariants` gửi `options` sai format | Medusa v2: `options = Record<string, string>` |
-
-### 2.2 Bug Fixes trong Migration Logic
-
-| # | Bug | Fix |
-|---|-----|-----|
-| 1 | Migration UI không hiển thị feedback chi tiết | Viết lại toàn bộ rollback feedback: progress bar, phase indicator, stats, status banner |
-| 2 | Sản phẩm không được gán danh mục sau khi tạo | Chuyển sang gán categories trong `batchCreateProducts` payload |
-| 3 | `findProductBySku` được gọi ngay cả khi `strategy="create"` — thừa | Chỉ gọi khi `strategy !== "create"` |
-| 4 | Luồng update không gán categories | Thêm `categories` vào update payload |
-| 5 | `forEach` với async không chờ Promise | Đổi sang `for...of` loop |
+| 1 | Media lưu vào `uploads/migration/wordpress/media/{hash}/` | Đổi sang `wp-content/uploads/{year}/{month}/{filename}` |
+| 2 | Trùng filename tạo file mới `-1`, `-2` | Ghi đè (overwrite) thay vì tạo mới |
+| 3 | `rewriteHtmlImages()` không match được URLs | Build mapping với original URLs thay vì hashes |
+| 4 | Dev server chạy code cũ sau khi edit | Kill + restart dev server |
 
 ---
 
 ## 3. Các Vấn Đề Còn Tồn Tại
 
-### 3.1 Cần Kiểm Tra Thêm
-
 | # | Issue | Mức độ | Ghi chú |
 |---|-------|---------|---------|
-| 1 | **Category sync Parent-Child** | Cao | Categories được sync, nhưng cần verify parent relationship đúng trên Medusa |
-| 2 | **Inventory assignment** | Cao | Variants được tạo nhưng inventory chưa được gán (Medusa v2 tách inventory module) |
-| 3 | **Product variant options** | Trung bình | Medusa v2 auto-links variants to options qua title matching — cần verify |
-| 4 | **WooCommerce categories không map đúng** | Cao | Nếu categories chưa được migrate trước, sản phẩm sẽ không có category |
-| 5 | **Product không hiển thị sau migrate** | Cao | Cần reload Products page sau migration |
-
-### 3.2 Các File Chứa Thông Tin Bảo Mật (Không Push Git)
-
-```
-apps/admin-ui/lib/migration/.env          # Database credentials
-apps/admin-ui/lib/migration/.env.example  # Template (OK to push)
-```
-
-**Lưu ý:** Không push các file `.env` lên git. File `.env.example` đã có template để reference.
+| 1 | **Cần verify media migration thực tế** | Cao | Chạy migration với nhiều ảnh để test deduplication |
+| 2 | **Verify HTML rewrite** cho description images | Trung bình | Kiểm tra ảnh trong mô tả được rewrite đúng |
+| 3 | **LocalStorage pool** cần persist qua sessions | Trung bình | Pool nên được backup/restore nếu user clear browser |
+| 4 | **Progress UI** cho media download | Thấp | Hiển thị progress khi tải nhiều ảnh |
 
 ---
 
@@ -155,25 +130,29 @@ npm run dev
 ### 4.2 Build & Lint
 
 ```bash
-# Build admin-ui
 cd apps/admin-ui
 npm run build
-
-# Lint
 npm run lint
-
-# Migration CLI (dry-run)
-npm run migration:dry-run
 ```
 
-### 4.3 Test Migration Flow
+### 4.3 Test Media Migration Flow
 
 1. Mở http://localhost:3000/migration
 2. Điền config (WooCommerce URL, credentials, Medusa backend URL)
-3. Chọn **Categories + Products** để sync
-4. Chọn conflict strategy: **Create** (xoá dữ liệu cũ trước)
-5. Click **Start Migration**
-6. Quan sát logs chi tiết từng sản phẩm
+3. Chọn **Sản phẩm**
+4. Click **Start Migration**
+5. Quan sát:
+   - Ảnh được tải về `public/wp-content/uploads/{year}/{month}/`
+   - Trùng URL → log "Reuse existing" (không tải lại)
+   - Trùng filename → ghi đè (không tạo file mới)
+
+### 4.4 Verify Deduplication
+
+1. Migration product A có 5 ảnh
+2. Migration product B có 3 ảnh (2 trùng với A)
+3. Kiểm tra:
+   - Chỉ 6 files trong uploads (5 + 1 mới)
+   - Log có "Reuse existing" cho 2 ảnh trùng
 
 ---
 
@@ -182,81 +161,71 @@ npm run migration:dry-run
 ```
 apps/
 ├── admin-ui/                          # Next.js 15 + App Router
+│   ├── public/
+│   │   └── wp-content/
+│   │       └── uploads/               # Media upload destination (WordPress structure)
+│   │           └── {year}/{month}/   # Ví dụ: 2026/04/image.jpg
 │   ├── app/
 │   │   ├── (admin)/
-│   │   │   ├── products/page.tsx       # Product listing (Medusa API)
-│   │   │   ├── categories/page.tsx    # Category listing (Medusa API)
-│   │   │   └── migration/page.tsx      # Migration UI
+│   │   │   ├── migration/page.tsx     # Migration UI
+│   │   │   ├── products/page.tsx      # Product listing
+│   │   │   └── categories/page.tsx    # Category listing
 │   │   └── api/
-│   │       ├── medusa/[...slug]/       # Medusa proxy
-│   │       └── woo/[...slug]/          # WooCommerce proxy
-│   ├── components/
-│   │   ├── products/                   # Product components
-│   │   └── categories/                 # Category components
+│   │       ├── medusa/
+│   │       │   ├── upload-media/      # Media upload handler (WordPress structure)
+│   │       │   └── [...slug]/         # Medusa proxy
+│   │       ├── fetch-image/           # Proxy để fetch ảnh từ WordPress (tránh CORS)
+│   │       └── woo/[...slug]/         # WooCommerce proxy
+│   ├── components/migration/
+│   │   ├── migration-options-popup.tsx
+│   │   └── migration-progress.tsx
 │   ├── services/
-│   │   ├── migration.service.ts        # Migration orchestration
-│   │   ├── medusa.service.ts           # Medusa API client
-│   │   └── woocommerce.service.ts      # WooCommerce API client
-│   ├── lib/
-│   │   ├── transform.ts               # WooCommerce → Medusa transform
-│   │   └── transform/index.ts         # Re-export
-│   └── types/
-│       └── migration.ts               # Type definitions
+│   │   ├── migration.service.ts        # Main migration flow
+│   │   ├── medusa.service.ts          # Medusa API calls + inventory update
+│   │   └── media-migration.service.ts  # Media deduplication pool
+│   └── lib/
+│       ├── media-helpers.ts           # URL normalize, rewrite HTML, sanitize
+│       └── products/product-filters.ts
 │
 └── backend-ui/                         # Medusa v2
-    └── apps/backend/
-        └── medusa-config.ts           # Port 9000
+    └── apps/backend/                   # Port 9000
 ```
 
 ---
 
-## 6. Bước Tiếp Theo Đề Xuất
+## 6. Bước Tiếp Theo
 
-### 6.1 Ngắn Hạn (1-2 ngày)
+### 6.1 Ngắn Hạn (Hôm Nay)
 
-- [ ] **Verify Category Parent-Child** — Kiểm tra categories hiển thị đúng hierarchy trên Medusa
-- [ ] **Fix Inventory Assignment** — Variants được tạo nhưng cần gán inventory qua Medusa Inventory Module
-- [ ] **Product Edit** — Hoàn thiện ProductFormDialog để edit sản phẩm
-- [ ] **Product Delete** — Thêm delete functionality với confirmation
-- [ ] **Image Upload** — Hỗ trợ upload ảnh lên Medusa media library
+- [ ] **Verify media deduplication** — Chạy migration với products có ảnh trùng
+- [ ] **Verify HTML rewrite** — Kiểm tra ảnh trong description được rewrite đúng URL mới
+- [ ] **Verify overwrite** — Kiểm tra trùng filename không tạo file mới
 
-### 6.2 Trung Hạn (1 tuần)
+### 6.2 Trung Hạn
 
-- [ ] **Orders page** — Hiển thị orders từ Medusa
-- [ ] **Customers page** — Hiển thị customers
-- [ ] **Dashboard** — Thống kê tổng quan
-- [ ] **Inventory management** — Quản lý tồn kho riêng
-- [ ] **Tags management** — Sync tags từ WooCommerce
-
-### 6.3 Dài Hạn (Phase 2+)
-
-- [ ] **Storefront** — Next.js storefront kết nối Medusa storefront API
-- [ ] **AI Marketing** — Marketing automation
-- [ ] **ML Intelligence** — Machine learning recommendations
+- [ ] **Backup/restore media pool** — Export/import localStorage pool
+- [ ] **Media progress UI** — Progress bar khi tải nhiều ảnh
+- [ ] **Retry failed images** — Thêm tuỳ chọn retry cho ảnh fail
+- [ ] **Image CDN integration** — Hỗ trợ upload lên Cloudflare R2/S3
 
 ---
 
 ## 7. Changelog
 
-### 2026-05-02
+### 2026-05-03 (Chiều)
 
-- **feat:** Product listing gọi Medusa API với filters (search, category, status, stock)
-- **feat:** Category listing với tree view và parent-child sync
-- **feat:** Migration UI hoàn toàn mới với logs chi tiết từng sản phẩm
-- **feat:** ProductFormDialog với 3-tab layout
-- **fix:** 16 Medusa API response parsing bugs
-- **fix:** Category parent-child hierarchy resolution
-- **fix:** Product không được gán category sau khi migrate
-- **perf:** Bỏ `findProductBySku` khi strategy="create" (tiết kiệm hàng ngàn requests)
-- **perf:** Cache category lookup trong batchCreateCategories
-- **docs:** Cập nhật kiến trúc project trong progress.md
+- **feat:** WordPress media structure — lưu vào `wp-content/uploads/{year}/{month}/{filename}`
+- **feat:** Extract year/month từ WordPress URL gốc
+- **fix:** Overwrite thay vì tạo file mới khi trùng filename
+- **fix:** `rewriteHtmlImages()` mapping với original URLs thay vì hashes
+- **perf:** Deduplication — trùng URL chỉ tải 1 lần, reuse từ pool
 
-### 2026-05-01
+### 2026-05-03 (Sáng)
 
-- **feat:** Backend-ui cố định port 9000
-- **fix:** Syntax error trong migration.service.ts (duplicate import line)
-- **feat:** Migration page bổ sung rollback feedback
-- **fix:** Lỗi không đồng bộ sản phẩm (thiếu file transform/index.ts)
+- **fix:** Stock/inventory — Medusa v2 Inventory Module integration
+- **fix:** `getStockStatus()` fallback check `outofstock`/`onbackorder`
+- **refactor:** Migration UI simplified — chỉ 2 tuỳ chọn dữ liệu
+- **perf:** Default selectedTypes = `["categories", "products"]`
 
 ---
 
@@ -265,22 +234,15 @@ apps/
 ### Conventional Commits
 
 ```
-feat(migration): integrate Medusa v2 Admin API with category assignment
+feat(migration): WordPress media structure with deduplication
 
-- Product listing now fetches from Medusa API with filters
-- Category listing displays tree view with parent-child hierarchy
-- Migration flow resolves Medusa category IDs from WooCommerce mapping
-- ProductFormDialog: 3-tab layout for edit/view product details
-- Quick actions: view, edit, delete, sync buttons
-- Product stats bar: total, published, draft, outofstock counts
-- 16 Medusa API response parsing fixes for v2 endpoints
-- Strip variants from product update payload (Medusa v2 restriction)
-- Skip findProductBySku for strategy="create" (perf optimization)
-- Migration UI: detailed per-product logs with pricing & stock info
-- Add rollback progress bar with phase indicators and stats
-- WooCommerce proxy API route for client-side fetching
-- Medusa proxy: improved JWT auth and error handling
-- Fix category parent-child resolution in batch creation
+- Change upload path to wp-content/uploads/{year}/{month}/{filename}
+  preserving original WordPress URLs for SEO
+- Extract year/month from source WordPress URL
+- Overwrite existing files instead of creating -1, -2 copies
+- Fix rewriteHtmlImages() to use original URLs instead of hashes
+- Media deduplication pool: same URL = download once, reuse everywhere
+- Add wp-content/uploads/ to .gitignore
 ```
 
 ---
@@ -293,12 +255,6 @@ feat(migration): integrate Medusa v2 Admin API with category assignment
 - admin-ui: standalone Next.js 15 app với TypeScript
 - backend-ui: Medusa v2 standalone app
 
-### Lưu ý về workspace
-
-- Hiện tại `apps/backend-ui` có workspace riêng (`package.json` có `"private": true` và `"workspaces"`)
-- Cấu hình này đang conflict với root workspace
-- Cần cân nhắc flatten về root workspace hoặc giữ nguyên 2 workspace riêng
-
 ### Khởi động
 
 ```bash
@@ -310,3 +266,17 @@ npm run dev  # Port 9000
 cd apps/admin-ui
 npm run dev  # Port 3000
 ```
+
+### Media Upload Path
+
+```
+Source: WordPress/WooCommerce (e.g., mytholaptop.vn/wp-content/uploads/2026/04/image.jpg)
+↓ Download via /api/medusa/upload-media
+↓ Save to: apps/admin-ui/public/wp-content/uploads/{year}/{month}/{filename}
+↓ Access via: http://localhost:3000/wp-content/uploads/2026/04/image.jpg
+```
+
+**Lưu ý bảo mật:**
+- Không push các file `.env` lên git
+- Không push thư mục `public/wp-content/uploads/` và `public/uploads/` lên git
+- Đã thêm vào `.gitignore`

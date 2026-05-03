@@ -50,6 +50,7 @@ import type {
   IdMapping,
   MigrationMode,
 } from "@/types";
+import { DEFAULT_MEDIA_OPTIONS, type MediaMigrationOptions } from "@/types/media-mapping";
 
 // Default state
 const DEFAULT_PROGRESS: MigrationProgress = {
@@ -139,18 +140,40 @@ export default function MigrationPage() {
     "mainImage",
     "gallery",
     "shortDesc",
-    "longDesc",
-    "variants",
-    "inventory",
-    "tags",
   ]);
   const [conflictStrategy, setConflictStrategy] =
     useState<ConflictStrategy>("update");
   const [migrationMode, setMigrationMode] = useState<MigrationMode>("continue");
-  const [allowDelete, setAllowDelete] = useState(false);
   const [batchSize, setBatchSize] = useState(100);
   const [skipOnError, setSkipOnError] = useState(true);
-  const [preserveImages, setPreserveImages] = useState(true);
+  const [preserveImages, setPreserveImages] = useState(false); // Default: Tải ảnh về Medusa
+  const [mediaOptions, setMediaOptions] = useState<MediaMigrationOptions>(DEFAULT_MEDIA_OPTIONS);
+
+  // Handler for preserveImages - sync với mediaOptions
+  const handlePreserveImagesChange = useCallback((value: boolean) => {
+    setPreserveImages(value);
+    // Khi chọn "Giữ nguyên URL", disable các download options
+    if (value) {
+      setMediaOptions((prev) => ({
+        ...prev,
+        downloadThumbnails: false,
+        downloadGallery: false,
+        downloadCategoryImages: false,
+        downloadDescriptionImages: false,
+        downloadShortDescImages: false,
+      }));
+    } else {
+      // Khi chọn "Tải về Medusa", enable các download options về default
+      setMediaOptions((prev) => ({
+        ...prev,
+        downloadThumbnails: true,
+        downloadGallery: true,
+        downloadCategoryImages: true,
+        downloadDescriptionImages: true,
+        downloadShortDescImages: true,
+      }));
+    }
+  }, []);
 
   // Migration state
   const [isRunning, setIsRunning] = useState(false);
@@ -286,10 +309,10 @@ export default function MigrationPage() {
           selectedTypes,
           conflictStrategy,
           migrationMode: "restart" as const,
-          allowDelete,
           batchSize,
           skipOnError,
           preserveImages,
+          mediaOptions,
         },
         (log) => {
           if (isCancelledRef.current) return;
@@ -348,7 +371,7 @@ export default function MigrationPage() {
         setIsRunning(false);
       }
     }
-  }, [wordpressUrl, wooKey, wooSecret, medusaKey, medusaEmail, medusaPassword, medusaUrl, selectedTypes, conflictStrategy, migrationMode, allowDelete, batchSize, skipOnError, preserveImages]);
+  }, [wordpressUrl, wooKey, wooSecret, medusaKey, medusaEmail, medusaPassword, medusaUrl, selectedTypes, conflictStrategy, migrationMode, batchSize, skipOnError, preserveImages, mediaOptions]);
 
   // Handle cancel
   const handleCancel = useCallback(() => {
@@ -552,16 +575,16 @@ export default function MigrationPage() {
         <MigrationOptionsPopup
           selectedTypes={selectedTypes}
           conflictStrategy={conflictStrategy}
-          allowDelete={allowDelete}
           batchSize={batchSize}
           skipOnError={skipOnError}
           preserveImages={preserveImages}
+          mediaOptions={mediaOptions}
           onTypeToggle={toggleType}
           onConflictChange={setConflictStrategy}
-          onAllowDeleteChange={setAllowDelete}
           onBatchSizeChange={setBatchSize}
           onSkipOnErrorChange={setSkipOnError}
-          onPreserveImagesChange={setPreserveImages}
+          onPreserveImagesChange={handlePreserveImagesChange}
+          onMediaOptionsChange={setMediaOptions}
           isRunning={isRunning}
         />
       </div>
@@ -639,7 +662,6 @@ export default function MigrationPage() {
                 onStart={handleStartMigration}
                 onCancel={handleCancel}
                 onRollback={handleRollback}
-                allowDelete={allowDelete}
                 isConnected={isConnected}
               />
 
