@@ -1,14 +1,44 @@
 import {
   LayoutDashboard,
-  ArrowLeftRight,
+  RefreshCw,
   Package,
   FolderTree,
   Tags,
+  Building2,
+  Settings2,
+  Layers,
+  Warehouse,
+  ArrowLeftRight,
   Receipt,
   Users,
-  UserCog,
+  Shield,
   Settings,
   Laptop,
+  UserRound,
+  UserRoundCog,
+  ShoppingCart,
+  ShieldCheck,
+  MessageSquare,
+  Zap,
+  BarChart3,
+  Activity,
+  FileText,
+  Sparkles,
+  Facebook,
+  Globe,
+  Video,
+  ImageIcon,
+  Calendar,
+  Library,
+  FileCode,
+  Brain,
+  ShoppingBag,
+  CreditCard,
+  Truck,
+  RotateCcw,
+  Tag,
+  FileText as FileTextIcon,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,56 +57,227 @@ export const NAV_ITEMS: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    title: "Migration WordPress",
-    href: "/migration",
-    icon: ArrowLeftRight,
-  },
-  {
-    title: "Sản phẩm",
-    href: "/products",
-    icon: Package,
+    title: "Nội dung",
+    href: "/content",
+    icon: FileText,
     children: [
       {
-        title: "Quản lý sản phẩm",
-        href: "/products",
-        icon: Package,
+        title: "Tổng quan nội dung",
+        href: "/content",
+        icon: LayoutDashboard,
       },
       {
-        title: "Quản lý danh mục",
-        href: "/products/categories",
-        icon: FolderTree,
+        title: "Tạo bài viết AI",
+        href: "/content/ai-generator",
+        icon: Sparkles,
       },
       {
-        title: "Quản lý thẻ",
-        href: "/products/tags",
-        icon: Tags,
+        title: "Bài viết Facebook",
+        href: "/content/facebook-posts",
+        icon: Facebook,
+      },
+      {
+        title: "Bài viết Website",
+        href: "/content/website-posts",
+        icon: Globe,
+      },
+      {
+        title: "Kịch bản video",
+        href: "/content/video-scripts",
+        icon: Video,
+      },
+      {
+        title: "Prompt hình ảnh",
+        href: "/content/image-prompts",
+        icon: ImageIcon,
+      },
+      {
+        title: "Lịch đăng bài",
+        href: "/content/calendar",
+        icon: Calendar,
+      },
+      {
+        title: "Thư viện nội dung",
+        href: "/content/library",
+        icon: Library,
+      },
+      {
+        title: "Mẫu nội dung",
+        href: "/content/templates",
+        icon: FileCode,
+      },
+      {
+        title: "Cấu hình AI",
+        href: "/content/settings",
+        icon: Brain,
       },
     ],
   },
   {
-    title: "Hoá đơn bán hàng",
-    href: "/orders",
-    icon: Receipt,
+    title: "Hàng hoá",
+    href: "/products",
+    icon: Package,
+    children: [
+      {
+        title: "Sản phẩm",
+        href: "/products",
+        icon: Package,
+      },
+      {
+        title: "Danh mục",
+        href: "/products/categories",
+        icon: FolderTree,
+      },
+      {
+        title: "Thẻ",
+        href: "/products/tags",
+        icon: Tags,
+      },
+      {
+        title: "Thương hiệu",
+        href: "/products/brands",
+        icon: Building2,
+      },
+      {
+        title: "Thuộc tính",
+        href: "/products/attributes",
+        icon: Settings2,
+      },
+      {
+        title: "Biến thể",
+        href: "/products/variants",
+        icon: Layers,
+      },
+      {
+        title: "Kho hàng",
+        href: "/products/inventory",
+        icon: Warehouse,
+      },
+      {
+        title: "Đồng bộ",
+        href: "/products/sync",
+        icon: ArrowLeftRight,
+      },
+    ],
+  },
+  {
+    title: "Bán hàng",
+    href: "/sales",
+    icon: ShoppingBag,
+    children: [
+      {
+        title: "Tổng quan bán hàng",
+        href: "/sales",
+        icon: LayoutDashboard,
+      },
+      {
+        title: "Đơn hàng",
+        href: "/sales/orders",
+        icon: Receipt,
+      },
+      {
+        title: "Tạo đơn hàng (POS)",
+        href: "/sales/pos",
+        icon: ShoppingBag,
+      },
+      {
+        title: "Thanh toán",
+        href: "/sales/payments",
+        icon: CreditCard,
+      },
+      {
+        title: "Giao hàng",
+        href: "/sales/shipping",
+        icon: Truck,
+      },
+      {
+        title: "Trả hàng & hoàn tiền",
+        href: "/sales/refunds",
+        icon: RotateCcw,
+      },
+      {
+        title: "Giỏ hàng dở dang",
+        href: "/sales/carts",
+        icon: ShoppingCart,
+      },
+      {
+        title: "Khuyến mãi",
+        href: "/sales/promotions",
+        icon: Tag,
+      },
+      {
+        title: "Báo giá",
+        href: "/sales/quotes",
+        icon: FileTextIcon,
+      },
+      {
+        title: "Nhật ký bán hàng",
+        href: "/sales/logs",
+        icon: ClipboardList,
+      },
+    ],
   },
   {
     title: "Khách hàng",
     href: "/customers",
     icon: Users,
-  },
-  {
-    title: "Nhân viên & Phân quyền",
-    href: "/staff",
-    icon: UserCog,
     children: [
       {
-        title: "Quản lý nhân viên",
+        title: "Danh sách khách hàng",
+        href: "/customers",
+        icon: Users,
+      },
+      {
+        title: "Nhóm khách hàng",
+        href: "/customers/groups",
+        icon: UserRoundCog,
+      },
+      {
+        title: "Lịch sử mua hàng",
+        href: "/customers/purchase-history",
+        icon: ShoppingCart,
+      },
+      {
+        title: "Bảo hành & công nợ",
+        href: "/customers/warranty-debt",
+        icon: ShieldCheck,
+      },
+      {
+        title: "ZNS & CSKH",
+        href: "/customers/zns",
+        icon: MessageSquare,
+      },
+      {
+        title: "Kịch bản chăm sóc",
+        href: "/customers/care-scenarios",
+        icon: Zap,
+      },
+      {
+        title: "Phân khúc khách hàng",
+        href: "/customers/segments",
+        icon: BarChart3,
+      },
+      {
+        title: "Nhật ký tương tác",
+        href: "/customers/activity-log",
+        icon: Activity,
+      },
+    ],
+  },
+  {
+    title: "Quản trị",
+    href: "/staff",
+    icon: Shield,
+    children: [
+      {
+        title: "Nhân viên",
         href: "/staff",
         icon: Users,
       },
       {
         title: "Vai trò",
         href: "/staff/roles",
-        icon: UserCog,
+        icon: Shield,
       },
       {
         title: "Phân quyền",
@@ -100,27 +301,55 @@ export const NAV_TOP: NavItem[] = [
   },
 ];
 
-export function isActivePath(href: string, pathname: string): boolean {
-  if (href === "/dashboard" && pathname === "/") {
-    return true;
-  }
-  return pathname === href || pathname.startsWith(href + "/");
+/**
+ * Check if current path exactly matches the href.
+ */
+export function isExactMatch(href: string, pathname: string): boolean {
+  if (!href) return false;
+  return pathname === href;
 }
 
-export function isParentActive(parent: NavItem, pathname: string): boolean {
-  if (parent.children) {
-    return parent.children.some(
-      (child) => isActivePath(child.href || "", pathname)
-    );
-  }
+/**
+ * Check if the parent item has an active child route.
+ */
+export function hasActiveChild(parent: NavItem, pathname: string): boolean {
+  if (!parent.children) return false;
+  return parent.children.some(
+    (child) => isExactMatch(child.href || "", pathname)
+  );
+}
+
+/**
+ * Check if the current path matches any child of the parent
+ * OR if the pathname starts with the parent's href prefix.
+ * Used to auto-expand parents when a child route is active.
+ */
+export function isParentRoute(parent: NavItem, pathname: string): boolean {
+  if (!parent.children) return false;
+  if (!parent.href) return false;
+  // Check exact match on the parent href
+  if (pathname === parent.href) return true;
+  // Check if any child is active
+  if (hasActiveChild(parent, pathname)) return true;
+  // Auto-expand: if pathname starts with parent href + "/", it's an active child route
+  const prefix = parent.href.endsWith("/") ? parent.href : parent.href + "/";
+  if (pathname.startsWith(prefix)) return true;
   return false;
 }
 
-export function isChildActive(child: NavItem, pathname: string): boolean {
-  return isActivePath(child.href || "", pathname);
-}
-
+/**
+ * Get the currently active child item from a parent.
+ */
 export function getActiveChild(parent: NavItem, pathname: string): NavItem | undefined {
   if (!parent.children) return undefined;
-  return parent.children.find((child) => isActivePath(child.href || "", pathname));
+  return parent.children.find(
+    (child) => isExactMatch(child.href || "", pathname)
+  );
+}
+
+/**
+ * Check if a child item is the active route.
+ */
+export function isChildActive(child: NavItem, pathname: string): boolean {
+  return isExactMatch(child.href || "", pathname);
 }

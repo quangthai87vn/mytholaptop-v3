@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Info,
   CheckCircle,
@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Download,
   FileJson,
+  FileSpreadsheet,
   Trash2,
 } from "lucide-react";
 import {
@@ -37,6 +38,165 @@ interface MigrationLogViewProps {
   mappingData?: MappingData | null;
   onClearLogs?: () => void;
   onClearMapping?: () => void;
+  /** Progress info để hiển thị trong CSV */
+  progressInfo?: {
+    phase: string;
+    totalItems: number;
+    processedItems: number;
+    successCount: number;
+    failCount: number;
+    currentItemName?: string;
+  };
+  /** Stats để hiển thị trong CSV */
+  statsInfo?: {
+    totalCategories: number;
+    migratedCategories: number;
+    totalProducts: number;
+    migratedProducts: number;
+    failedProducts: number;
+    skippedProducts: number;
+  };
+}
+
+// ============================================================
+// CSV EXPORT FUNCTIONS
+// ============================================================
+
+/**
+ * Chuyển đổi mảng logs thành định dạng CSV
+ */
+function convertLogsToCsv(logs: MigrationLog[]): string {
+  const headers = [
+    "Timestamp",
+    "Step",
+    "Action",
+    "Status",
+    "Message",
+    "ID",
+  ];
+  
+  const rows = logs.map((log) => [
+    formatDateTime(log.timestamp),
+    log.step,
+    log.action,
+    log.status,
+    `"${log.message.replace(/"/g, '""')}"`, // Escape quotes in CSV
+    log.id,
+  ]);
+  
+  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+}
+
+/**
+ * Tạo CSV cho progress (xử lý tới đâu)
+ */
+function convertProgressToCsv(
+  progressInfo: MigrationLogViewProps["progressInfo"],
+  statsInfo: MigrationLogViewProps["statsInfo"]
+): string {
+  const headers = ["Field", "Value"];
+  const rows: string[][] = [
+    ["Report Generated", new Date().toISOString()],
+    ["", ""],
+    ["=== PROGRESS ===", ""],
+    ["Current Phase", progressInfo?.phase || "N/A"],
+    ["Total Items", String(progressInfo?.totalItems || 0)],
+    ["Processed Items", String(progressInfo?.processedItems || 0)],
+    ["Success Count", String(progressInfo?.successCount || 0)],
+    ["Failed Count", String(progressInfo?.failCount || 0)],
+    ["Current Item", progressInfo?.currentItemName || "N/A"],
+    ["Progress %", progressInfo?.totalItems && progressInfo.totalItems > 0
+      ? `${Math.round((progressInfo.processedItems / progressInfo.totalItems) * 100)}%`
+      : "N/A"],
+    ["", ""],
+    ["=== STATS ===", ""],
+    ["Total Categories", String(statsInfo?.totalCategories || 0)],
+    ["Migrated Categories", String(statsInfo?.migratedCategories || 0)],
+    ["Total Products", String(statsInfo?.totalProducts || 0)],
+    ["Migrated Products", String(statsInfo?.migratedProducts || 0)],
+    ["Failed Products", String(statsInfo?.failedProducts || 0)],
+    ["Skipped Products", String(statsInfo?.skippedProducts || 0)],
+  ];
+  
+  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+}
+
+/**
+ * Tạo CSV chi tiết cho từng sản phẩm đã migrate
+ */
+function convertProductsToCsv(logs: MigrationLog[]): string {
+  const headers = [
+    "STT",
+    "Timestamp",
+    "Product Name",
+    "WooCommerce ID",
+    "Medusa ID",
+    "Status",
+    "Details",
+  ];
+  
+  // Extract product creation logs
+  const productLogs = logs.filter(
+    (log) =>
+      log.step === "migrate_products" &&
+      (log.action === "SUCCESS" || log.action === "ERROR" || log.action === "WARNING")
+  );
+  
+  const rows = productLogs.map((log, index) => {
+    // Extract info từ message
+    const message = log.message;
+    let productName = "";
+    let wooId = "";
+    let medusaId = "";
+    let details = "";
+    
+    // Parse message format: [index] Tạo thành công: "Name" → Medusa ID: xxx
+    const successMatch = message.match(/\[(\d+)\/(\d+)\] Tạo thành công: "([^"]+)" → Medusa ID: ([^\s|]+)/);
+    if (successMatch) {
+      productName = successMatch[3];
+      medusaId = successMatch[4];
+      // Try to find WooCommerce ID from earlier log
+    }
+    
+    // Parse message format: Đang tạo: "Name" (WooCommerce ID: xxx)
+    const creatingMatch = message.match(/Đang tạo: "([^"]+)" \(WooCommerce ID: (\d+)\)/);
+    if (creatingMatch) {
+      productName = creatingMatch[1];
+      wooId = creatingMatch[2];
+    }
+    
+    // For errors
+    if (log.action === "ERROR") {
+      details = message;
+    }
+    
+    return [
+      String(index + 1),
+      formatDateTime(log.timestamp),
+      `"${productName.replace(/"/g, '""')}"`,
+      wooId,
+      medusaId,
+      log.action,
+      `"${details.replace(/"/g, '""')}"`,
+    ];
+  });
+  
+  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+}
+
+/**
+ * Tải file CSV
+ */
+function downloadCsv(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // Extract error details from log message for highlighting
@@ -111,6 +271,8 @@ export function MigrationLogView({
   mappingData,
   onClearLogs,
   onClearMapping,
+  progressInfo,
+  statsInfo,
 }: MigrationLogViewProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -121,6 +283,29 @@ export function MigrationLogView({
   const startIndex = (currentPage - 1) * PAGE_SIZE;
   const endIndex = startIndex + PAGE_SIZE;
   const paginatedLogs = sortedLogs.slice(startIndex, endIndex);
+
+  // Tính số lượng log theo status
+  const successCount = logs.filter((l) => l.status === "success").length;
+  const errorCount = logs.filter((l) => l.status === "error").length;
+  const warningCount = logs.filter((l) => l.status === "warning").length;
+
+  // Tải về toàn bộ nhật ký (logs) dạng CSV
+  const handleDownloadLogsCsv = useCallback(() => {
+    const csv = convertLogsToCsv(logs);
+    downloadCsv(csv, `migration_logs_${Date.now()}.csv`);
+  }, [logs]);
+
+  // Tải về progress report dạng CSV
+  const handleDownloadProgressCsv = useCallback(() => {
+    const csv = convertProgressToCsv(progressInfo, statsInfo);
+    downloadCsv(csv, `migration_progress_${Date.now()}.csv`);
+  }, [progressInfo, statsInfo]);
+
+  // Tải về chi tiết sản phẩm đã migrate dạng CSV
+  const handleDownloadProductsCsv = useCallback(() => {
+    const csv = convertProductsToCsv(logs);
+    downloadCsv(csv, `migration_products_${Date.now()}.csv`);
+  }, [logs]);
 
   // Tải về toàn bộ nhật ký (logs) dạng JSON
   const handleDownloadLogs = () => {
@@ -222,9 +407,36 @@ export function MigrationLogView({
                 <DropdownMenuItem onClick={handleDownloadLogs}>
                   <FileJson className="mr-2 size-4" />
                   <div>
-                    <p className="font-medium">Xuất nhật ký (Logs)</p>
+                    <p className="font-medium">Xuất nhật ký (JSON)</p>
                     <p className="text-xs text-muted-foreground">
                       File JSON chứa toàn bộ nhật ký migration
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadLogsCsv}>
+                  <FileSpreadsheet className="mr-2 size-4" />
+                  <div>
+                    <p className="font-medium">Xuất nhật ký (CSV)</p>
+                    <p className="text-xs text-muted-foreground">
+                      File CSV để mở trong Excel/Google Sheets
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadProgressCsv}>
+                  <FileSpreadsheet className="mr-2 size-4" />
+                  <div>
+                    <p className="font-medium">Xuất Tiến độ (CSV)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Báo cáo tiến độ xử lý hiện tại
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadProductsCsv}>
+                  <FileSpreadsheet className="mr-2 size-4" />
+                  <div>
+                    <p className="font-medium">Xuất DS Sản phẩm (CSV)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Danh sách sản phẩm đã migrate thành công
                     </p>
                   </div>
                 </DropdownMenuItem>

@@ -50,13 +50,10 @@ import {
 } from "@/lib/products/product-filters";
 
 const DEFAULT_PAGE_SIZE = 30;
-const DEFAULT_COLUMNS = 5;
-const LS_COLUMNS_KEY = "admin-ui.products.gridColumns";
 const LS_PAGE_SIZE_KEY = "admin-ui.products.pageSize";
 
 /**
  * Build a category tree from flat list + handle include_descendants_tree.
- * API với include_descendants_tree trả về nested structure - flatten để lấy tất cả.
  */
 function flattenCategories(cats: MedusaProductCategory[]): MedusaProductCategory[] {
   const result: MedusaProductCategory[] = [];
@@ -140,18 +137,13 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<ProductStatus>("all");
   const [stockFilter, setStockFilter] = useState<StockStatus>("all");
-  const [columns, setColumns] = useState(DEFAULT_COLUMNS);
+  const [columns, setColumns] = useState(5);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<MedusaProduct | null>(null);
   const [viewProduct, setViewProduct] = useState<AdaptedProduct | null>(null);
 
   useEffect(() => {
-    const savedColumns = localStorage.getItem(LS_COLUMNS_KEY);
-    if (savedColumns) {
-      const parsed = parseInt(savedColumns, 10);
-      if ([3, 4, 5, 6].includes(parsed)) setColumns(parsed);
-    }
     const savedPageSize = localStorage.getItem(LS_PAGE_SIZE_KEY);
     if (savedPageSize) {
       const parsed = parseInt(savedPageSize, 10);
@@ -224,7 +216,7 @@ export default function ProductsPage() {
 
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
-    if (search) labels.push(`Search: ${search}`);
+    if (search) labels.push(`Tìm: ${search}`);
     if (categoryFilter && categoryFilter !== "all")
       labels.push(`Danh mục: ${getCategoryNameById(categoryTree, categoryFilter)}`);
     if (statusFilter && statusFilter !== "all")
@@ -269,7 +261,6 @@ export default function ProductsPage() {
 
   const handleColumnsChange = (value: number) => {
     setColumns(value);
-    localStorage.setItem(LS_COLUMNS_KEY, String(value));
   };
 
   const handlePageSizeChange = (value: number) => {
@@ -287,20 +278,24 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 w-full">
       {/* Page header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between min-w-0">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl truncate">
             Quản lý sản phẩm
           </h1>
-          <p className="text-muted-foreground">
-            Quản lý danh sách sản phẩm trong cửa hàng.
+          <p className="text-muted-foreground hidden sm:block">
+            {totalCount > 0 ? `${totalCount} sản phẩm` : "Danh sách sản phẩm trong cửa hàng"}
           </p>
         </div>
-        <Button onClick={() => { setEditingProduct(null); setProductDialogOpen(true); }}>
+        <Button
+          onClick={() => { setEditingProduct(null); setProductDialogOpen(true); }}
+          className="shrink-0"
+        >
           <Plus className="mr-2 size-4" />
-          Thêm sản phẩm
+          <span className="hidden sm:inline">Thêm sản phẩm</span>
+          <span className="sm:hidden">Thêm</span>
         </Button>
       </div>
 
@@ -331,11 +326,11 @@ export default function ProductsPage() {
 
       {/* Loading state */}
       {isLoading && (
-        <div className={`grid gap-3 ${getGridClass(columns)}`}>
-          {Array.from({ length: pageSize > 12 ? 12 : pageSize }).map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+          {Array.from({ length: 12 }).map((_, i) => (
             <Card key={i} className="overflow-hidden">
-              <Skeleton className="aspect-square rounded-none" />
-              <CardContent className="p-2 space-y-1.5">
+              <Skeleton className="aspect-[4/3] rounded-none" />
+              <CardContent className="p-3 space-y-2">
                 <Skeleton className="h-3 w-full" />
                 <Skeleton className="h-3 w-2/3" />
                 <Skeleton className="h-4 w-1/2" />
@@ -550,15 +545,4 @@ export default function ProductsPage() {
       />
     </div>
   );
-}
-
-function getGridClass(columns: number): string {
-  const base = "grid-cols-2 sm:grid-cols-3";
-  switch (columns) {
-    case 3: return `${base} lg:grid-cols-3 2xl:grid-cols-3`;
-    case 4: return `${base} lg:grid-cols-4 2xl:grid-cols-4`;
-    case 5: return `${base} lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5`;
-    case 6: return `${base} lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6`;
-    default: return `${base} lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5`;
-  }
 }

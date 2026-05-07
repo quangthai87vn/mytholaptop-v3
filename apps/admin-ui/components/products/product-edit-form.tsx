@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Package,
   DollarSign,
@@ -13,6 +14,9 @@ import {
   ImageIcon,
   Search,
   Code2,
+  Eye,
+  Save,
+  X,
 } from "lucide-react";
 import { useUpdateProduct } from "@/hooks/use-medusa";
 import { useCategories } from "@/hooks/use-medusa";
@@ -25,6 +29,7 @@ import { ProductInventoryTab } from "./product-inventory-tab";
 import { ProductImagesTab } from "./product-images-tab";
 import { ProductSeoTab } from "./product-seo-tab";
 import { ProductWordPressMetadataTab } from "./product-wordpress-metadata-tab";
+import { ProductEditSidebar } from "./product-edit-sidebar";
 import { toast } from "sonner";
 
 export type ProductEditFormData = {
@@ -110,8 +115,51 @@ function mapMedusaProductToForm(p: MedusaProduct): ProductEditFormData {
   const medusaPrice = firstVariant?.calculated_price
     ? (firstVariant.calculated_price / 100).toString()
     : firstVariant?.price?.[0]
-    ? (firstVariant.price[0] / 100).toString()
-    : "";
+      ? (firstVariant.price[0] / 100).toString()
+      : "";
+
+  const imageUrls: string[] = [];
+  const seenUrls = new Set<string>();
+
+  const isValidImageUrl = (url: string | undefined | null): boolean => {
+    if (!url) return false;
+    const trimmed = url.trim();
+    return trimmed.length >= 5;
+  };
+
+  if (isValidImageUrl(p.thumbnail) && !seenUrls.has(p.thumbnail!.trim())) {
+    seenUrls.add(p.thumbnail!.trim());
+    imageUrls.push(p.thumbnail!.trim());
+  }
+  if (p.images) {
+    for (const img of p.images) {
+      const url = img.url || (img as any).src || "";
+      if (isValidImageUrl(url) && !seenUrls.has(url.trim())) {
+        seenUrls.add(url.trim());
+        imageUrls.push(url.trim());
+      }
+    }
+  }
+
+  const wooImages = meta?.wordpress_image;
+  if (wooImages) {
+    let urls: string[] = [];
+    if (wooImages.startsWith("[")) {
+      try {
+        urls = JSON.parse(wooImages);
+      } catch {
+        urls = wooImages.split(",").map((u) => u.trim()).filter(Boolean);
+      }
+    } else {
+      urls = wooImages.split(",").map((u) => u.trim()).filter(Boolean);
+    }
+    for (const url of urls) {
+      if (isValidImageUrl(url) && !seenUrls.has(url.trim())) {
+        seenUrls.add(url.trim());
+        imageUrls.push(url.trim());
+      }
+    }
+  }
 
   return {
     title: p.title || "",
@@ -128,8 +176,8 @@ function mapMedusaProductToForm(p: MedusaProduct): ProductEditFormData {
     inventory_quantity: String(firstVariant?.inventory_quantity ?? ""),
     manage_inventory: firstVariant?.manage_inventory ?? false,
     stock_status_override: undefined,
-    thumbnail: p.thumbnail,
-    gallery_urls: p.images?.map((img) => img.url || "") || [],
+    thumbnail: imageUrls[0] || "",
+    gallery_urls: imageUrls.slice(1),
     category_ids: p.categories?.map((c) => c.id) || [],
     tags: p.tags?.map((t) => t.value) || [],
     short_description: undefined,
@@ -241,9 +289,47 @@ export function ProductEditForm({ product, onSuccess }: ProductEditFormProps) {
   const [activeTab, setActiveTab] = useState("basic");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Track unsaved changes
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Update form when product changes
   useEffect(() => {
     setForm(mapMedusaProductToForm(product));
+    setIsDirty(false);
   }, [product]);
+
+  // Track dirty state
+  useEffect(() => {
+    const current = mapMedusaProductToForm(product);
+    const isFormDirty = JSON.stringify(form) !== JSON.stringify(current);
+    setIsDirty(isFormDirty);
+  }, [form, product]);
+
+  // Unsaved changes warning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  // Handle navigation with unsaved changes
+  const handleNavigate = useCallback(
+    (href: string) => {
+      if (isDirty) {
+        const confirmed = window.confirm(
+          "Bạn có thay đổi chưa lưu. Bạn có chắc muốn rời khỏi trang này?"
+        );
+        if (!confirmed) return;
+      }
+      router.push(href);
+    },
+    [isDirty, router]
+  );
 
   const categoryTree = buildCategoryTreeFromMedusa(
     categoriesData?.data?.product_categories || []
@@ -271,6 +357,20 @@ export function ProductEditForm({ product, onSuccess }: ProductEditFormProps) {
       return;
     }
 
+    if (!form.handle.trim()) {
+      toast.error("Vui lòng nhập slug sản phẩm");
+      return;
+    }
+
+    if (form.regular_price && isNaN(parseFloat(form.regular_price))) {
+      toast.error("Giá thường phải là số");
+      return;
+    }
+    if (form.sale_price && isNaN(parseFloat(form.sale_price))) {
+      toast.error("Giá khuyến mãi phải là số");
+      return;
+    }
+
     setIsSaving(true);
     try {
       const payload = mapFormToMedusaPayload(form, product);
@@ -281,6 +381,7 @@ export function ProductEditForm({ product, onSuccess }: ProductEditFormProps) {
 
       if (result.success) {
         toast.success("Đã cập nhật sản phẩm");
+        setIsDirty(false);
         onSuccess?.();
         router.push("/products");
       } else {
@@ -294,89 +395,244 @@ export function ProductEditForm({ product, onSuccess }: ProductEditFormProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="sticky top-0 z-10 bg-background pb-4">
-          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7">
-            <TabsTrigger value="basic" className="gap-1.5 text-xs sm:text-sm">
-              <Package className="size-3.5" />
-              <span className="hidden sm:inline">Thông tin</span>
-              <span className="sm:hidden">Chung</span>
-            </TabsTrigger>
-            <TabsTrigger value="pricing" className="gap-1.5 text-xs sm:text-sm">
-              <DollarSign className="size-3.5" />
-              <span>Giá</span>
-            </TabsTrigger>
-            <TabsTrigger value="categories" className="gap-1.5 text-xs sm:text-sm">
-              <FolderTree className="size-3.5" />
-              <span className="hidden sm:inline">Danh mục</span>
-            </TabsTrigger>
-            <TabsTrigger value="inventory" className="gap-1.5 text-xs sm:text-sm">
-              <Warehouse className="size-3.5" />
-              <span className="hidden sm:inline">Tồn kho</span>
-            </TabsTrigger>
-            <TabsTrigger value="images" className="gap-1.5 text-xs sm:text-sm">
-              <ImageIcon className="size-3.5" />
-              <span className="hidden sm:inline">Hình ảnh</span>
-            </TabsTrigger>
-            <TabsTrigger value="seo" className="gap-1.5 text-xs sm:text-sm">
-              <Search className="size-3.5" />
-              <span>SEO</span>
-            </TabsTrigger>
-            <TabsTrigger value="wordpress" className="gap-1.5 text-xs sm:text-sm">
-              <Code2 className="size-3.5" />
-              <span className="hidden sm:inline">WP Meta</span>
-            </TabsTrigger>
-          </TabsList>
+    <div className="flex flex-col lg:flex-row gap-6 min-w-0">
+      {/* Main Content - Left Column (65-70%) */}
+      <div className="flex-1 min-w-0 space-y-4">
+        {/* Tabs Navigation */}
+        <div className="bg-background border rounded-lg p-1">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7 h-auto bg-transparent gap-1">
+              <TabsTrigger
+                value="basic"
+                className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <Package className="size-3.5" />
+                <span className="hidden sm:inline">Thông tin</span>
+                <span className="sm:hidden">TT</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="pricing"
+                className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <DollarSign className="size-3.5" />
+                <span>Giá</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="categories"
+                className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <FolderTree className="size-3.5" />
+                <span className="hidden sm:inline">Danh mục</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="inventory"
+                className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <Warehouse className="size-3.5" />
+                <span className="hidden sm:inline">Tồn kho</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="images"
+                className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <ImageIcon className="size-3.5" />
+                <span className="hidden sm:inline">Hình ảnh</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="seo"
+                className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <Search className="size-3.5" />
+                <span>SEO</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="wordpress"
+                className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <Code2 className="size-3.5" />
+                <span className="hidden sm:inline">WP Meta</span>
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Tab Contents */}
+            <div className="mt-4">
+              <TabsContent value="basic" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Thông tin cơ bản</CardTitle>
+                    <CardDescription>
+                      Tên, mô tả và trạng thái sản phẩm
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductBasicTab form={form} onChange={setForm} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="pricing" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Giá bán</CardTitle>
+                    <CardDescription>
+                      Thiết lập giá thường, giá khuyến mãi và SKU
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductPricingTab
+                      form={form}
+                      onChange={setForm}
+                      excludeProductId={product.id}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="categories" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Danh mục & Thẻ</CardTitle>
+                    <CardDescription>
+                      Phân loại sản phẩm và quản lý thẻ
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductCategoriesTab
+                      form={form}
+                      onChange={setForm}
+                      categories={categoryTree}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="inventory" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Tồn kho</CardTitle>
+                    <CardDescription>
+                      Quản lý số lượng và trạng thái kho hàng
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductInventoryTab form={form} onChange={setForm} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="images" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Hình ảnh</CardTitle>
+                    <CardDescription>
+                      Quản lý ảnh đại diện và gallery sản phẩm
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductImagesTab form={form} onChange={setForm} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="seo" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">SEO</CardTitle>
+                    <CardDescription>
+                      Tối ưu tiêu đề, mô tả và URL cho công cụ tìm kiếm
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductSeoTab form={form} onChange={setForm} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="wordpress" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">WordPress Metadata</CardTitle>
+                    <CardDescription>
+                      Thông tin migration từ WooCommerce (chỉ đọc)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductWordPressMetadataTab meta={wooMeta} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </div>
+          </Tabs>
         </div>
+      </div>
 
-        <Card className="mt-4">
-          <CardContent className="p-6">
-            <TabsContent value="basic" className="mt-0">
-              <ProductBasicTab form={form} onChange={setForm} />
-            </TabsContent>
+      {/* Sidebar - Right Column (30-35%) */}
+      <div className="w-full lg:w-80 xl:w-96 shrink-0 order-first lg:order-last">
+        <div className="sticky top-4 space-y-4">
+          {/* Preview Sidebar */}
+          <ProductEditSidebar
+            form={form}
+            productId={product.id}
+            isDirty={isDirty}
+          />
 
-            <TabsContent value="pricing" className="mt-0">
-              <ProductPricingTab form={form} onChange={setForm} />
-            </TabsContent>
+          {/* Action Buttons */}
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  onClick={() => {
+                    const previewUrl = `/products/${form.handle || product.id}`;
+                    window.open(previewUrl, "_blank");
+                  }}
+                >
+                  <Eye className="size-4" />
+                  Xem trước sản phẩm
+                </Button>
 
-            <TabsContent value="categories" className="mt-0">
-              <ProductCategoriesTab
-                form={form}
-                onChange={setForm}
-                categories={categoryTree}
-              />
-            </TabsContent>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-1.5"
+                    onClick={() => handleNavigate("/products")}
+                  >
+                    <X className="size-4" />
+                    Hủy
+                  </Button>
 
-            <TabsContent value="inventory" className="mt-0">
-              <ProductInventoryTab form={form} onChange={setForm} />
-            </TabsContent>
-
-            <TabsContent value="images" className="mt-0">
-              <ProductImagesTab form={form} onChange={setForm} />
-            </TabsContent>
-
-            <TabsContent value="seo" className="mt-0">
-              <ProductSeoTab form={form} onChange={setForm} />
-            </TabsContent>
-
-            <TabsContent value="wordpress" className="mt-0">
-              <ProductWordPressMetadataTab meta={wooMeta} />
-            </TabsContent>
-          </CardContent>
-        </Card>
-      </Tabs>
-
-      <div className="sticky bottom-4 flex justify-end gap-3">
-        <Button variant="outline" onClick={() => router.push("/products")}>
-          Huỷ
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={!form.title.trim() || isSaving}
-        >
-          {isSaving ? "Đang lưu..." : "Lưu thay đổi"}
-        </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 gap-1.5"
+                    onClick={handleSave}
+                    disabled={!form.title.trim() || !form.handle.trim() || isSaving}
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        Đang lưu...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="size-4" />
+                        Lưu
+                        {isDirty && (
+                          <span className="relative flex size-2">
+                            <span className="absolute inline-flex size-full rounded-full bg-yellow-400 opacity-75 animate-ping" />
+                            <span className="relative inline-flex size-2 rounded-full bg-yellow-500" />
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

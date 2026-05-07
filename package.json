@@ -5,12 +5,14 @@
     "apps/*"
   ],
   "scripts": {
-    "dev:admin": "pnpm --filter admin-ui dev",
-    "dev:backend": "pnpm --filter backend dev",
-    "build:admin": "pnpm --filter admin-ui build",
-    "build:backend": "pnpm --filter backend build",
-    "build": "turbo build",
     "dev": "turbo dev",
+    "dev:admin": "pnpm --filter admin-ui dev",
+    "dev:backend": "pnpm --filter backend-ui dev",
+    "dev:website": "pnpm --filter website-ui dev",
+    "build": "turbo build",
+    "build:admin": "pnpm --filter admin-ui build",
+    "build:backend": "pnpm --filter backend-ui build",
+    "build:website": "pnpm --filter website-ui build",
     "lint": "turbo lint",
     "clean": "turbo clean"
   },

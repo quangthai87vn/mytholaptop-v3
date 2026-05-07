@@ -133,13 +133,54 @@ export interface MediaMigrationOptions {
   maxRetries: number;
   timeoutMs: number;
   maxFileSizeBytes: number;
-  /** When true: migrate each product WITH its images inline (synchronous). Default: false */
-  inlineProductMedia: boolean;
+  /**
+   * @deprecated Not used in v2. Media migration is always done after product creation.
+   */
+  inlineProductMedia?: boolean;
+  /**
+   * When true: only download images from the WordPress/WooCommerce domain.
+   * Skips images from external domains (CDNs, hotlinked images, hstatic.net, etc.)
+   */
+  onlyFromWordpressDomain: boolean;
+  /** Image upload configuration */
+  imageUploadConfig?: ImageUploadConfig;
 }
 
-// ============================================================
-// DEFAULT OPTIONS
-// ============================================================
+/**
+ * Image upload configuration for migration.
+ * Controls where and how images are stored on the server.
+ */
+export interface ImageUploadConfig {
+  /** Enable/disable image migration */
+  enabled: boolean;
+  /** Physical directory on server to save images (relative to admin-ui root or absolute). Default: public/uploads/medusa/products */
+  uploadRootDir: string;
+  /** Public URL prefix stored in database (relative path). Must start with /. Default: /uploads/medusa/products */
+  uploadPublicPath: string;
+  /** Sub-folder pattern for organizing images. Supports {year}/{month}. Default: {year}/{month} */
+  imageFolderPattern: string;
+  /** How to name uploaded files. Options: keep-original-name | product-slug | source-hash | product-sku. Default: source-hash */
+  imageFileNameMode: "keep-original-name" | "product-slug" | "source-hash" | "product-sku";
+  /** What to do when a file already exists. Options: skip | overwrite | rename. Default: skip */
+  imageConflictStrategy: "skip" | "overwrite" | "rename";
+  /**
+   * Format stored in database.
+   * - relative_path: /uploads/medusa/products/2026/05/abc.webp (RECOMMENDED)
+   * - absolute_url: https://mytholaptop.vn/uploads/medusa/products/2026/05/abc.webp (NOT recommended)
+   * Default: relative_path
+   */
+  imageSaveMode: "relative_path" | "absolute_url";
+}
+
+export const DEFAULT_IMAGE_UPLOAD_CONFIG: ImageUploadConfig = {
+  enabled: true,
+  uploadRootDir: "public/wp-content/uploads",
+  uploadPublicPath: "/wp-content/uploads",
+  imageFolderPattern: "{year}/{month}",
+  imageFileNameMode: "keep-original-name",
+  imageConflictStrategy: "overwrite",
+  imageSaveMode: "relative_path",
+};
 
 export const DEFAULT_MEDIA_OPTIONS: MediaMigrationOptions = {
   downloadThumbnails: true,
@@ -152,7 +193,9 @@ export const DEFAULT_MEDIA_OPTIONS: MediaMigrationOptions = {
   maxRetries: 3,
   timeoutMs: 30000,
   maxFileSizeBytes: 20 * 1024 * 1024, // 20MB
-  inlineProductMedia: true, // Default: migrate each product WITH its images inline
+  inlineProductMedia: true,
+  onlyFromWordpressDomain: false, // Default: allow all domains
+  imageUploadConfig: DEFAULT_IMAGE_UPLOAD_CONFIG,
 };
 
 // ============================================================
@@ -170,6 +213,8 @@ export const MEDIA_STORAGE_KEYS = {
   USAGE_RECORDS: "mtl_media_usage_records",
   /** Media migration stats */
   MEDIA_STATS: "mtl_media_stats",
+  /** Image upload configuration */
+  IMAGE_UPLOAD_CONFIG: "mtl_image_upload_config",
 } as const;
 
 // ============================================================
@@ -262,6 +307,26 @@ export const mediaStorage = {
   saveStats(stats: MediaMigrationStats): void {
     if (typeof window === "undefined") return;
     localStorage.setItem(MEDIA_STORAGE_KEYS.MEDIA_STATS, JSON.stringify(stats));
+  },
+
+  /** Load image upload config */
+  loadImageUploadConfig(): ImageUploadConfig {
+    if (typeof window === "undefined") return DEFAULT_IMAGE_UPLOAD_CONFIG;
+    try {
+      const raw = localStorage.getItem(MEDIA_STORAGE_KEYS.IMAGE_UPLOAD_CONFIG);
+      if (raw) {
+        return { ...DEFAULT_IMAGE_UPLOAD_CONFIG, ...JSON.parse(raw) };
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_IMAGE_UPLOAD_CONFIG;
+  },
+
+  /** Save image upload config */
+  saveImageUploadConfig(config: ImageUploadConfig): void {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(MEDIA_STORAGE_KEYS.IMAGE_UPLOAD_CONFIG, JSON.stringify(config));
   },
 
   /** Clear all media migration data */

@@ -118,15 +118,16 @@ export async function getProduct(
   config: MedusaConfig,
   productId: string
 ): Promise<MedusaApiResponse<MedusaProduct>> {
-  const fields = [
-    "id", "title", "status", "thumbnail", "description", "metadata",
-    "categories", "tags", "variants", "images", "options", "inventory_items",
-    "handle", "type", "collection", "weight", "length", "width", "height",
-  ].join(",");
+  // Medusa v2: fetch product without field filtering to ensure all data including images is returned
   const result = await medusaRequest<{ product: MedusaProduct }>(
-    `/admin/products/${productId}?fields=${fields}`,
+    `/admin/products/${productId}`,
     config
   );
+  if (typeof window !== "undefined") {
+    console.debug("[getProduct] Raw API response keys:", result.data ? Object.keys(result.data) : "no data");
+    console.debug("[getProduct] images field:", result.data?.product?.images);
+    console.debug("[getProduct] thumbnail field:", result.data?.product?.thumbnail);
+  }
   if (result.success && result.data) {
     return { success: true, data: result.data.product };
   }

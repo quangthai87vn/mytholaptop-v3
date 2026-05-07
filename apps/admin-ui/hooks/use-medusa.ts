@@ -174,6 +174,46 @@ export function useDeleteProduct() {
 }
 
 // ============================================================
+// SKU VALIDATION
+// ============================================================
+
+export interface SkuCheckResult {
+  sku: string;
+  exists: boolean;
+  duplicates: Array<{ id: string; title: string }>;
+}
+
+export function useCheckSku(sku: string, excludeId?: string) {
+  const { data: configured } = useMedusaConfigured();
+
+  return useQuery({
+    queryKey: ["check-sku", sku, excludeId],
+    queryFn: async (): Promise<SkuCheckResult> => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+
+      // Call our API route to check SKU
+      const params = new URLSearchParams({ sku });
+      if (excludeId) params.append("excludeId", excludeId);
+
+      const response = await fetch(`/api/admin/products/check-sku?${params}`, {
+        headers: {
+          "x-medusa-config": JSON.stringify(config),
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to check SKU: ${response.status}`);
+      }
+
+      return response.json();
+    },
+    enabled: !!configured && !!sku && sku.length > 0,
+    staleTime: 1000 * 60, // Cache for 1 minute
+  });
+}
+
+// ============================================================
 // CATEGORIES
 // ============================================================
 

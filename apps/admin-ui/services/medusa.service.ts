@@ -13,6 +13,45 @@ import type {
   IdMapping,
 } from "@/types";
 
+import { mimeTypeToExt } from "@/lib/media-helpers";
+
+// ============================================================
+// CONCURRENT PROCESSING HELPERS
+// ============================================================
+
+/**
+ * Xử lý array với concurrency limit
+ */
+async function processWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  processor: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+  const executing: Promise<void>[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const promise = processor(item, i).then((result) => {
+      results[i] = result;
+    });
+
+    executing.push(promise);
+
+    if (executing.length >= concurrency) {
+      await Promise.race(executing);
+      // Remove resolved promises
+      executing.splice(
+        executing.findIndex((p) => p === promise),
+        1
+      );
+    }
+  }
+
+  await Promise.all(executing);
+  return results;
+}
+
 // ============================================================
 // API CLIENT
 // ============================================================
@@ -37,6 +76,7 @@ export interface MedusaBatchResponse {
   created: number;
   updated: number;
   failed: number;
+  skipped?: number;
   errors: Array<{ 
     index: number; 
     message: string; 
@@ -205,107 +245,75 @@ export async function updateCategory(
 }
 
 /**
- * Batch create categories with upsert logic.
- * If a category with the same handle exists in Medusa, update it instead of creating.
- *
- * @param parentIdMap - Maps WooCommerce parent ID (number) -> Medusa category ID.
- *                       Will be updated as each category is processed so children can reference parents.
- * @param categories - Categories to create/update in Medusa format.
+ * Callback for category progress updates
+ */
+export type CategoryProgressCallback = (data: {
+  type: "created" | "updated" | "failed";
+  name: string;
+  index: number;
+  total: number;
+  medusaId?: string;
+  error?: string;
+}) => void;
+
+/**
+ * Batch create categories with HIERARCHY-AWARE processing for SPEED.
+ * Groups categories by level and processes each level in parallel.
+ * Parent categories are created BEFORE children.
  */
 export async function batchCreateCategories(
   config: MedusaConfig,
   categories: MedusaCategory[],
-  parentIdMap: Record<number, string> = {}
+  parentIdMap: Record<number, string> = {},
+  options?: {
+    onProgress?: CategoryProgressCallback;
+  }
 ): Promise<MedusaApiResponse<MedusaBatchResponse & { ids: string[]; wooIdToMedusaId: Record<string, string> }>> {
   const ids: string[] = [];
   let created = 0;
   let updated = 0;
   const errors: Array<{ index: number; message: string; categoryName?: string }> = [];
-
   const wooIdToMedusaId: Record<string, string> = {};
 
-  for (let i = 0; i < categories.length; i++) {
-    const cat = categories[i];
+  const startTime = Date.now();
 
-    // Resolve the correct parent_category_id using parentIdMap
-    // (parentIdMap is updated as we go, so parents created before children work correctly)
-    const wooParentId = cat.metadata?.originalParentId
-      ? parseInt(cat.metadata.originalParentId, 10)
-      : null;
-    const resolvedParentId = wooParentId !== null && wooParentId !== undefined
-      ? parentIdMap[wooParentId] ?? null
-      : null;
+  // Separate categories by hierarchy level
+  // Level 0 = root categories (no parent)
+  // Level 1 = children of root
+  // Level 2 = grandchildren, etc.
+  const levels: Map<number, MedusaCategory[]> = new Map();
+  
+  for (const cat of categories) {
+    const level = parseInt(cat.metadata?.parentCategoryLevel || "0", 10);
+    if (!levels.has(level)) {
+      levels.set(level, []);
+    }
+    levels.get(level)!.push(cat);
+  }
 
-    // Check if category already exists by WooCommerce originalId (highest priority)
-    let existingId: string | null = null;
-    if (cat.metadata?.originalId) {
-      const byOriginalId = await findCategoryByOriginalId(config, cat.metadata.originalId);
-      if (byOriginalId.success && byOriginalId.data) {
-        existingId = byOriginalId.data.id;
-      }
+  if (typeof window !== "undefined") {
+    console.debug(`[batchCreateCategories] Processing ${categories.length} categories in ${levels.size} levels`);
+  }
+
+  // Process each level sequentially, but categories within each level in parallel
+  for (const [level, levelCats] of [...levels.entries()].sort((a, b) => a[0] - b[0])) {
+    if (typeof window !== "undefined") {
+      console.debug(`[batchCreateCategories] Processing level ${level} (${levelCats.length} categories)`);
     }
 
-    // Fallback: check by handle if not found by originalId
-    if (!existingId && cat.handle) {
-      const byHandle = await findCategoryByHandle(config, cat.handle);
-      if (byHandle.success && byHandle.data) {
-        existingId = byHandle.data.id;
-      }
-    }
+    // Process all categories at this level in parallel
+    await Promise.all(
+      levelCats.map(async (cat, idx) => {
+        try {
+          // Resolve parent_category_id from parentIdMap
+          const wooParentId = cat.metadata?.originalParentId
+            ? parseInt(cat.metadata.originalParentId, 10)
+            : null;
+          const resolvedParentId = wooParentId !== null && wooParentId !== undefined
+            ? parentIdMap[wooParentId] ?? null
+            : null;
 
-    let result;
-    if (existingId) {
-      // Update existing category
-      result = await medusaRequest<{ product_category: { id: string } } | { code: string; message: string }>(
-        `/admin/product-categories/${existingId}`,
-        config,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: cat.name,
-            description: cat.description,
-            is_active: true,
-            is_internal: false,
-            metadata: cat.metadata,
-            // Update parent relationship if needed
-            ...(resolvedParentId ? { parent_category_id: resolvedParentId } : {}),
-          }),
-        }
-      );
-
-      if (result.success && result.data && "product_category" in result.data) {
-        const medusaId = result.data.product_category.id;
-        ids.push(medusaId);
-        // Update parentIdMap so children can reference this category
-        // Key = this category's WooCommerce ID, Value = Medusa ID
-        const thisWooId = cat.metadata?.originalId
-          ? parseInt(cat.metadata.originalId, 10)
-          : null;
-        if (thisWooId !== null && thisWooId !== undefined) {
-          parentIdMap[thisWooId] = medusaId;
-          wooIdToMedusaId[String(thisWooId)] = medusaId;
-        }
-        updated++;
-      } else {
-        let errorMsg = result.error || "Update failed";
-        if (result.data && typeof result.data === "object") {
-          const dataObj = result.data as Record<string, unknown>;
-          errorMsg = (dataObj.message as string) || (dataObj.error as string) || errorMsg;
-        }
-        errors.push({
-          index: i,
-          message: `[${cat.name || "Unnamed"}] update failed: ${errorMsg}`,
-          categoryName: cat.name,
-        });
-      }
-    } else {
-      // Create new category
-      result = await medusaRequest<{ product_category: { id: string } } | { code: string; message: string }>(
-        "/admin/product-categories",
-        config,
-        {
-          method: "POST",
-          body: JSON.stringify({
+          const payload = {
             name: cat.name,
             description: cat.description,
             handle: cat.handle,
@@ -313,56 +321,310 @@ export async function batchCreateCategories(
             is_active: true,
             is_internal: false,
             metadata: cat.metadata,
-          }),
-        }
-      );
+          };
 
-      if (result.success && result.data && "product_category" in result.data) {
-        const medusaId = result.data.product_category.id;
-        ids.push(medusaId);
-        // Update parentIdMap so children can reference this category
-        // Key = this category's WooCommerce ID, Value = Medusa ID
-        const thisWooId = cat.metadata?.originalId
-          ? parseInt(cat.metadata.originalId, 10)
-          : null;
-        if (thisWooId !== null && thisWooId !== undefined) {
-          parentIdMap[thisWooId] = medusaId;
-          wooIdToMedusaId[String(thisWooId)] = medusaId;
-        }
-        created++;
-      } else {
-        let errorMsg = "Unknown error";
-        let httpStatus: number | undefined;
-        let errorCode: string | undefined;
-        if (result.data && typeof result.data === "object") {
-          const dataObj = result.data as Record<string, unknown>;
-          if (typeof dataObj.message === "string") {
-            errorMsg = dataObj.message;
-          } else if (typeof dataObj.error === "string") {
-            errorMsg = dataObj.error;
-          } else if (typeof dataObj.code === "string") {
-            errorCode = dataObj.code;
-            errorMsg = `[${errorCode}] ${dataObj.error || "Unknown"}`;
+          // Try to create
+          const createResult = await medusaRequest<{ product_category: { id: string } }>(
+            "/admin/product-categories",
+            config,
+            { method: "POST", body: JSON.stringify(payload) }
+          );
+
+          if (createResult.success && createResult.data && "product_category" in createResult.data) {
+            const medusaId = createResult.data.product_category.id;
+            ids.push(medusaId);
+            const thisWooId = cat.metadata?.originalId ? parseInt(cat.metadata.originalId, 10) : null;
+            if (thisWooId !== null && thisWooId !== undefined) {
+              parentIdMap[thisWooId] = medusaId;
+              wooIdToMedusaId[String(thisWooId)] = medusaId;
+            }
+            created++;
+            options?.onProgress?.({
+              type: "created",
+              name: cat.name || "Unnamed",
+              index: categories.indexOf(cat),
+              total: categories.length,
+              medusaId,
+            });
+            return;
           }
-        } else if (result.error) {
-          errorMsg = result.error;
-          const httpMatch = result.error.match(/HTTP (\d+)/);
-          if (httpMatch) httpStatus = parseInt(httpMatch[1], 10);
+
+          // If failed due to duplicate handle, the category already exists
+          const dataObj = (createResult.data && typeof createResult.data === "object") ? createResult.data as Record<string, unknown> : {};
+          const errorMsg = typeof dataObj.message === "string" ? dataObj.message : "";
+          
+          // Check for "already exists" error - category is already there, just map it
+          if (errorMsg.includes("already exists")) {
+            const byHandle = await findCategoryByHandle(config, cat.handle || "");
+            if (byHandle.success && byHandle.data) {
+              const medusaId = byHandle.data.id;
+              ids.push(medusaId);
+              const thisWooId = cat.metadata?.originalId ? parseInt(cat.metadata.originalId, 10) : null;
+              if (thisWooId !== null && thisWooId !== undefined) {
+                parentIdMap[thisWooId] = medusaId;
+                wooIdToMedusaId[String(thisWooId)] = medusaId;
+              }
+              updated++;
+              options?.onProgress?.({
+                type: "updated",
+                name: cat.name || "Unnamed",
+                index: categories.indexOf(cat),
+                total: categories.length,
+                medusaId,
+              });
+              return;
+            }
+            // If we can't find it by handle, count as error
+            const errMsg = `[${cat.name || "Unnamed"}] already exists but cannot find by handle`;
+            errors.push({ index: categories.indexOf(cat), message: errMsg, categoryName: cat.name });
+            options?.onProgress?.({
+              type: "failed",
+              name: cat.name || "Unnamed",
+              index: categories.indexOf(cat),
+              total: categories.length,
+              error: errMsg,
+            });
+            return;
+          }
+          
+          // For other invalid_data errors, try update
+          const errorType = typeof dataObj.type === "string" ? dataObj.type : "";
+          if (errorType === "invalid_data") {
+            const byHandle = await findCategoryByHandle(config, cat.handle || "");
+            if (byHandle.success && byHandle.data) {
+              const updateResult = await medusaRequest<{ product_category: { id: string } }>(
+                `/admin/product-categories/${byHandle.data.id}`,
+                config,
+                { method: "POST", body: JSON.stringify(payload) }
+              );
+              if (updateResult.success && updateResult.data && "product_category" in updateResult.data) {
+                const medusaId = updateResult.data.product_category.id;
+                ids.push(medusaId);
+                const thisWooId = cat.metadata?.originalId ? parseInt(cat.metadata.originalId, 10) : null;
+                if (thisWooId !== null && thisWooId !== undefined) {
+                  parentIdMap[thisWooId] = medusaId;
+                  wooIdToMedusaId[String(thisWooId)] = medusaId;
+                }
+                updated++;
+                return;
+              }
+            }
+          }
+
+          // Failed
+          const failMsg = typeof dataObj.message === "string" ? dataObj.message : (createResult.error || "Unknown");
+          errors.push({ index: categories.indexOf(cat), message: `[${cat.name || "Unnamed"}] failed: ${failMsg}`, categoryName: cat.name });
+          options?.onProgress?.({
+            type: "failed",
+            name: cat.name || "Unnamed",
+            index: categories.indexOf(cat),
+            total: categories.length,
+            error: failMsg,
+          });
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "Unknown";
+          errors.push({ index: categories.indexOf(cat), message: `[${cat.name || "Unnamed"}] exception: ${errMsg}`, categoryName: cat.name });
+          options?.onProgress?.({
+            type: "failed",
+            name: cat.name || "Unnamed",
+            index: categories.indexOf(cat),
+            total: categories.length,
+            error: errMsg,
+          });
         }
-        const httpStatusStr = httpStatus ? ` (HTTP ${httpStatus})` : "";
-        const errorCodeStr = errorCode ? ` [${errorCode}]` : "";
-        errors.push({
-          index: i,
-          message: `[${cat.name || "Unnamed"}]${errorCodeStr}${httpStatusStr} — ${errorMsg}`,
-          categoryName: cat.name,
+      })
+    );
+  }
+
+  const elapsed = Date.now() - startTime;
+  if (typeof window !== "undefined") {
+    console.debug(`[batchCreateCategories] Done in ${elapsed}ms. Created: ${created}, Updated: ${updated}, Failed: ${errors.length}`);
+  }
+
+  return {
+    success: errors.length === 0 || created > 0 || updated > 0,
+    data: { created, updated, failed: errors.length, errors, ids, wooIdToMedusaId },
+  };
+}
+
+// ============================================================
+// TAG OPERATIONS
+// ============================================================
+
+/**
+ * Medusa Product Tag format
+ */
+export interface MedusaProductTag {
+  id: string;
+  value: string;
+}
+
+/**
+ * Create a single product tag in Medusa.
+ */
+export async function createProductTag(
+  config: MedusaConfig,
+  tag: { value: string }
+): Promise<MedusaApiResponse<{ product_tag: { id: string; value: string } }>> {
+  return medusaRequest<{ product_tag: { id: string; value: string } }>(
+    "/admin/product-tags",
+    config,
+    { method: "POST", body: JSON.stringify(tag) }
+  );
+}
+
+/**
+ * List all product tags from Medusa.
+ */
+export async function listProductTags(
+  config: MedusaConfig,
+  limit: number = 100
+): Promise<MedusaApiResponse<{ product_tags: Array<{ id: string; value: string }>; count: number }>> {
+  return medusaRequest<{ product_tags: Array<{ id: string; value: string }>; count: number }>(
+    `/admin/product-tags?limit=${limit}`,
+    config
+  );
+}
+
+/**
+ * Find a product tag by value/name.
+ */
+export async function findProductTagByValue(
+  config: MedusaConfig,
+  value: string
+): Promise<MedusaApiResponse<{ id: string; value: string } | null>> {
+  const result = await listProductTags(config, 1000);
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error };
+  }
+  const found = result.data.product_tags.find(
+    (t) => t.value.toLowerCase() === value.toLowerCase()
+  );
+  return { success: true, data: found || null };
+}
+
+/**
+ * Callback for tag progress updates
+ */
+export type TagProgressCallback = (data: {
+  type: "created" | "found" | "failed";
+  value: string;
+  index: number;
+  total: number;
+  medusaId?: string;
+  error?: string;
+}) => void;
+
+/**
+ * Batch create or find product tags.
+ * Returns mapping of WooCommerce tag IDs to Medusa tag IDs.
+ */
+export async function batchCreateProductTags(
+  config: MedusaConfig,
+  tags: Array<{ id: number; name: string; slug: string }>,
+  options?: {
+    onProgress?: TagProgressCallback;
+  }
+): Promise<MedusaApiResponse<{ wooIdToMedusaId: Record<string, string>; created: number; found: number; failed: number }>> {
+  const wooIdToMedusaId: Record<string, string> = {};
+  let created = 0;
+  let found = 0;
+  let failed = 0;
+
+  // Process tags sequentially to avoid conflicts
+  for (let i = 0; i < tags.length; i++) {
+    const tag = tags[i];
+    const slug = tag.slug || tag.name.toLowerCase().replace(/\s+/g, "-");
+    const value = tag.name;
+
+    try {
+      // First, try to find existing tag
+      const existingResult = await findProductTagByValue(config, value);
+      
+      if (existingResult.success && existingResult.data) {
+        // Tag already exists
+        const medusaId = existingResult.data.id;
+        wooIdToMedusaId[String(tag.id)] = medusaId;
+        found++;
+        options?.onProgress?.({
+          type: "found",
+          value,
+          index: i + 1,
+          total: tags.length,
+          medusaId,
         });
+        continue;
       }
+
+      // Create new tag
+      const createResult = await createProductTag(config, { value });
+      
+      if (createResult.success && createResult.data && "product_tag" in createResult.data) {
+        const medusaId = createResult.data.product_tag.id;
+        wooIdToMedusaId[String(tag.id)] = medusaId;
+        created++;
+        options?.onProgress?.({
+          type: "created",
+          value,
+          index: i + 1,
+          total: tags.length,
+          medusaId,
+        });
+      } else {
+        // Check for "already exists" error
+        const dataObj = createResult.data as Record<string, unknown> | undefined;
+        const errorMsg = typeof dataObj?.message === "string" ? dataObj.message : "";
+        
+        if (errorMsg.includes("already exists") || errorMsg.includes("duplicate")) {
+          // Try to find it again
+          const retryResult = await findProductTagByValue(config, value);
+          if (retryResult.success && retryResult.data) {
+            wooIdToMedusaId[String(tag.id)] = retryResult.data.id;
+            found++;
+            options?.onProgress?.({
+              type: "found",
+              value,
+              index: i + 1,
+              total: tags.length,
+              medusaId: retryResult.data.id,
+            });
+          } else {
+            failed++;
+            options?.onProgress?.({
+              type: "failed",
+              value,
+              index: i + 1,
+              total: tags.length,
+              error: errorMsg || "Cannot create or find tag",
+            });
+          }
+        } else {
+          failed++;
+          options?.onProgress?.({
+            type: "failed",
+            value,
+            index: i + 1,
+            total: tags.length,
+            error: errorMsg || createResult.error || "Unknown error",
+          });
+        }
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Unknown";
+      failed++;
+      options?.onProgress?.({
+        type: "failed",
+        value,
+        index: i + 1,
+        total: tags.length,
+        error: errMsg,
+      });
     }
   }
 
   return {
-    success: errors.length === 0,
-    data: { created, updated, failed: errors.length, errors, ids, wooIdToMedusaId },
+    success: failed === 0 || created > 0 || found > 0,
+    data: { wooIdToMedusaId, created, found, failed },
   };
 }
 
@@ -396,21 +658,65 @@ export async function createProduct(
 /**
  * Update an existing product.
  * Medusa v2: NEVER send variants in update payload — variants must be managed separately.
+ * thumbnail và images ĐƯỢC GIỮ LẠI trong update payload — rất quan trọng cho media migration.
+ * relative path sẽ được convert sang absolute URL trước khi gửi.
  */
 export async function updateProduct(
   config: MedusaConfig,
   productId: string,
-  product: Partial<MedusaProduct>
+  product: Partial<MedusaProduct>,
+  options?: {
+    /** Base URL để convert relative image path → absolute URL. Mặc định = medusaBackendUrl. */
+    imageBaseUrl?: string;
+  }
 ): Promise<MedusaApiResponse<{ id: string; object: string }>> {
-  // Strip variants from update payload — Medusa v2 doesn't support updating variants via product update
-  const { variants, ...updatePayload } = product;
+  const { variants, subtitle, originalSku, originalId, shortDescription: _removed, ...updatePayload } = product as Record<string, unknown>;
+
+  // short_description is NOT a Medusa v2 top-level field
+  // Store it in metadata as woocommerce_short_description
+  const shortDesc = (product as Record<string, unknown>).shortDescription as string | undefined;
+
+  // Strip WooCommerce-specific and non-API fields from update payload
+  const sanitized: Record<string, unknown> = { ...updatePayload };
+
+  // Keep thumbnail and images for media migration updates
+  if (updatePayload.thumbnail !== undefined) {
+    sanitized.thumbnail = updatePayload.thumbnail;
+  }
+  if (updatePayload.images !== undefined) {
+    sanitized.images = updatePayload.images;
+  }
+
+  // description is a top-level Medusa field — keep it
+  // shortDescription (from rewriteHtmlDescriptions) → store in metadata
+  const baseMetadata = stripWooCommerceFields(updatePayload.metadata as Record<string, unknown> | undefined) || {};
+  if (shortDesc) {
+    baseMetadata.woocommerce_short_description = shortDesc;
+  }
+  sanitized.metadata = Object.keys(baseMetadata).length > 0 ? baseMetadata : undefined;
+
+  // Convert relative image paths (keep as relative — we fixed resolveImageUrl)
+  const imageBaseUrl = options?.imageBaseUrl || config.backendUrl;
+  const resolvedPayload = resolveProductImageUrls(
+    sanitized as Partial<MedusaProduct>,
+    config.backendUrl,
+    imageBaseUrl
+  );
+
+  if (typeof window !== "undefined") {
+    console.debug("[updateProduct] Payload thumbnail:", resolvedPayload.thumbnail);
+    console.debug("[updateProduct] Thumbnail type:", typeof resolvedPayload.thumbnail, "| Value:", resolvedPayload.thumbnail?.slice(0, 100));
+    console.debug("[updateProduct] Payload images:", resolvedPayload.images?.map(i => i.url.slice(0, 80)));
+    console.debug("[updateProduct] Payload description:", resolvedPayload.description ? "(has content)" : "none");
+    console.debug("[updateProduct] Payload shortDescription in metadata:", shortDesc ? "(has content)" : "none");
+  }
 
   const result = await medusaRequest<{ product: { id: string; object: string } }>(
     `/admin/products/${productId}`,
     config,
     {
       method: "POST",
-      body: JSON.stringify(updatePayload),
+      body: JSON.stringify(resolvedPayload),
     }
   );
 
@@ -1144,6 +1450,92 @@ export async function findProductBySku(
   return findProductByVariantSku(config, sku);
 }
 
+// ============================================================
+// URL NORMALIZATION HELPER
+// ============================================================
+
+/**
+ * Ensure image URL is stored as relative path.
+ * e.g. /wp-content/uploads/2023/12/image.jpg → /wp-content/uploads/2023/12/image.jpg
+ * e.g. https://mytholaptop.vn/wp-content/uploads/... → /wp-content/uploads/...
+ * e.g. https://mytholaptop.vn//wp-content/uploads/... → /wp-content/uploads/...
+ *
+ * Medusa v2: Store relative paths directly in database — do NOT convert to absolute URL.
+ */
+function resolveImageUrl(
+  relativePath: string,
+  medusaBackendUrl: string,
+  adminUiBaseUrl?: string
+): string {
+  if (!relativePath) return relativePath;
+
+  // Already absolute URL — extract relative path
+  if (relativePath.startsWith("http://") || relativePath.startsWith("https://")) {
+    // Extract /wp-content/uploads/... path from full URL
+    const relativeMatch = relativePath.match(/\/wp-content\/uploads\/.+/);
+    if (relativeMatch) {
+      return relativeMatch[0];
+    }
+    // Fallback: extract pathname
+    try {
+      return new URL(relativePath).pathname;
+    } catch {
+      return relativePath;
+    }
+  }
+
+  // Relative path starting with / — use as-is (this is what we want)
+  if (relativePath.startsWith("/")) {
+    // Fix double-slash case: ///wp-content/... → /wp-content/...
+    const cleaned = relativePath.replace(/\/+/g, "/");
+    return cleaned;
+  }
+
+  // Plain path without leading slash — add it
+  return `/${relativePath}`;
+}
+
+/**
+ * Resolve all relative image paths in a product update payload to absolute URLs.
+ * Images stored in admin-ui public folder → use adminUiBaseUrl
+ * Images stored in Medusa storage → use medusaBackendUrl
+ */
+function resolveProductImageUrls(
+  payload: Partial<MedusaProduct>,
+  medusaBackendUrl: string,
+  adminUiBaseUrl?: string
+): Partial<MedusaProduct> {
+  const resolved = { ...payload };
+
+  if (resolved.thumbnail) {
+    resolved.thumbnail = resolveImageUrl(resolved.thumbnail, medusaBackendUrl, adminUiBaseUrl);
+  }
+
+  if (resolved.images && resolved.images.length > 0) {
+    resolved.images = resolved.images.map((img) => ({
+      url: resolveImageUrl(img.url, medusaBackendUrl, adminUiBaseUrl),
+    }));
+  }
+
+  return resolved;
+}
+
+/**
+ * Strip WooCommerce-specific fields from metadata that Medusa doesn't accept.
+ * Medusa v2 API returns 400 for fields like 'short_description' in metadata.
+ */
+function stripWooCommerceFields(metadata: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!metadata) return undefined;
+  const forbiddenKeys = ["short_description", "description", "post_content", "post_excerpt"];
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (!forbiddenKeys.includes(key.toLowerCase())) {
+      filtered[key] = value;
+    }
+  }
+  return Object.keys(filtered).length > 0 ? filtered : undefined;
+}
+
 /**
  * Convert a MedusaProduct (from transform.ts) to the exact format Medusa v2 Admin API expects.
  *
@@ -1155,46 +1547,55 @@ export async function findProductBySku(
  * - product.images (Array<{url: string}>) -> unchanged ✓
  */
 function convertToApiInput(product: MedusaProduct): Record<string, unknown> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { subtitle: _removed, short_description: _shortDesc, originalSku: _origSku, originalId: _origId, ...productRest } = product;
+  // Preserve dimensions for API call (needed for length/width/height)
+  const dims = product.dimensions;
+  // Remove any WooCommerce-specific fields that Medusa doesn't accept
   const input: Record<string, unknown> = {
-    title: product.title,
-    subtitle: product.subtitle,
-    description: product.description,
-    handle: product.handle,
-    status: product.status,
-    thumbnail: product.thumbnail,
-    weight: product.weight,
+    title: productRest.title,
+    description: productRest.description || undefined,
+    handle: productRest.handle || undefined,
+    status: productRest.status || "draft",
+    // Only send thumbnail if it's a valid string
+    thumbnail: typeof productRest.thumbnail === "string" ? productRest.thumbnail : undefined,
+    weight: productRest.weight ?? undefined,
+    // Handle null dimensions explicitly
+    length: dims?.length ?? undefined,
+    height: dims?.height ?? undefined,
+    width: dims?.width ?? undefined,
     // Chỉ gửi tags nếu có id (Medusa yêu cầu id, không chấp nhận chỉ có value)
-    // Tags được migrate ở Phase 2 sẽ có id trong mapping
-    tags: product.tags
-      ? product.tags
+    tags: productRest.tags
+      ? productRest.tags
           .map((tag) => (typeof tag === "string" ? { value: tag } : tag))
           .filter((tag): tag is { id: string; value: string } => "id" in tag && typeof tag.id === "string")
       : undefined,
-    categories: product.categories,
-    images: product.images,
-    options: product.options,
-    metadata: product.metadata,
+    categories: productRest.categories?.length ? productRest.categories : undefined,
+    images: productRest.images?.length ? productRest.images : undefined,
+    options: productRest.options?.length ? productRest.options : undefined,
+    // Strip WooCommerce-specific fields from metadata (short_description, woo_*, wordpress_*)
+    metadata: stripWooCommerceFields(productRest.metadata || {}),
   };
 
-  if (product.dimensions) {
-    input.length = product.dimensions.length;
-    input.width = product.dimensions.width;
-    input.height = product.dimensions.height;
-  }
-
-  if (product.variants && product.variants.length > 0) {
-    input.variants = product.variants.map((v) => {
+  if (productRest.variants && productRest.variants.length > 0) {
+    input.variants = productRest.variants.map((v) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { originalSku: _vOrigSku, originalId: _vOrigId, ...variantRest } = v;
       const variant: Record<string, unknown> = {
-        title: v.title,
-        sku: v.sku,
+        title: variantRest.title || "Default Title",
+        sku: variantRest.sku || undefined,
       };
 
-      // Medusa v2 requires prices as array of price objects
-      if (v.prices && v.prices.length > 0) {
-        variant.prices = v.prices.map((p) => ({
+      // Medusa v2: prices is REQUIRED for each variant — do NOT omit it
+      if (variantRest.prices && variantRest.prices.length > 0) {
+        variant.prices = variantRest.prices.map((p) => ({
           amount: p.amount,
           currency_code: p.currency_code || "vnd",
         }));
+      } else {
+        // Skip variants without prices — don't send empty array
+        // This prevents Medusa from creating invalid variants
+        delete variant.prices;
       }
 
       // Medusa v2: variant-level options should NOT be sent.
@@ -1204,13 +1605,13 @@ function convertToApiInput(product: MedusaProduct): Record<string, unknown> {
       // in Medusa v2 product variant payload. Inventory is managed via Inventory Module separately.
       // These fields cause "Unrecognized fields" 400 errors.
       // However, variant-level metadata IS accepted by Medusa v2.
-      if (v.weight !== undefined) {
-        variant.weight = v.weight;
+      if (variantRest.weight !== undefined) {
+        variant.weight = variantRest.weight;
       }
 
       // Forward variant-level metadata (e.g., WooCommerce price/stock debug info)
-      if (v.metadata && Object.keys(v.metadata).length > 0) {
-        variant.metadata = v.metadata;
+      if (variantRest.metadata && Object.keys(variantRest.metadata).length > 0) {
+        variant.metadata = stripWooCommerceFields(variantRest.metadata);
       }
 
       return variant;
@@ -1229,7 +1630,12 @@ export type BatchCreateLogCallback = (message: string) => void;
 
 export interface BatchCreateProductsOptions {
   onLog?: BatchCreateLogCallback;
-  onProgress?: (current: number, total: number, status: "success" | "fail" | "skip") => void;
+  onProgress?: (current: number, total: number, status: "success" | "fail" | "skip", productTitle?: string, error?: string) => void;
+}
+
+export interface BatchCreateProductsResult extends MedusaBatchResponse {
+  ids: string[];
+  wooIdToMedusaId?: Record<number, string>; // wooId → medusaId mapping
 }
 
 export async function batchCreateProducts(
@@ -1237,8 +1643,9 @@ export async function batchCreateProducts(
   products: MedusaProduct[],
   wooIds?: number[],
   options?: BatchCreateProductsOptions
-): Promise<MedusaApiResponse<MedusaBatchResponse & { ids: string[] }>> {
+): Promise<MedusaApiResponse<BatchCreateProductsResult>> {
   const ids: string[] = [];
+  const wooIdToMedusaId: Record<number, string> = {};
   let created = 0;
   let skipped = 0;
   let failed = 0;
@@ -1261,24 +1668,22 @@ export async function batchCreateProducts(
     console.debug("[batchCreateProducts] Starting with", products.length, "products");
   }
 
+  // Only log first and last product to reduce console spam
+  const firstProduct = products[0];
+  const lastProduct = products[products.length - 1];
+  if (typeof window !== "undefined") {
+    console.debug(`[batchCreateProducts] Creating ${products.length} products: "${firstProduct?.title}" ... "${lastProduct?.title}"`);
+  }
+
   for (let i = 0; i < products.length; i++) {
     const product = products[i];
     const wooId = wooIds?.[i];
-
-    if (typeof window !== "undefined") {
-      console.debug("[batchCreateProducts] Creating product", i + 1, "/", products.length, "-", product.title, "| SKU:", product.originalSku);
-    }
 
     const productIdentifier = product.originalSku || product.originalId ? ` (SKU: ${product.originalSku || product.originalId})` : "";
     const wooIdStr = wooId ? ` [WooCommerce ID: ${wooId}]` : "";
 
     // Convert to API input format
     const apiInput = convertToApiInput(product);
-
-    // Debug: log payload chi tiết để xem lỗi 400 từ Medusa
-    if (typeof window !== "undefined") {
-      console.debug("[batchCreateProducts] Payload:", JSON.stringify(apiInput, null, 2));
-    }
 
     // Try up to 3 times with exponential backoff
     let result: MedusaApiResponse<{ product: { id: string } } | { code: string; message: string; type?: string }> = { success: false };
@@ -1323,40 +1728,55 @@ export async function batchCreateProducts(
     }
 
     if (result.success && result.data && "product" in result.data) {
-      ids.push(result.data.product.id);
+      const medusaId = result.data.product.id;
+      ids.push(medusaId);
+      if (wooId) {
+        wooIdToMedusaId[wooId] = medusaId;
+      }
       created++;
+      options?.onProgress?.(i + 1, products.length, "success", product.title);
       if (typeof window !== "undefined") {
         console.debug("[batchCreateProducts] Success:", result.data.product.id, `(${attempt + 1} attempt${attempt > 0 ? "s" : ""})`);
       }
     } else {
       if (typeof window !== "undefined") {
-        console.debug("[batchCreateProducts] Failed:", product.title, "| Error:", result.error, "| Data:", JSON.stringify(result.data)?.slice(0, 200));
+        console.debug("[batchCreateProducts] Failed:", product.title, "| Error:", result.error, "| Data:", JSON.stringify(result.data)?.slice(0, 500));
+        // Log the full API input for debugging
+        console.debug("[batchCreateProducts] API Input for failed product:", JSON.stringify(apiInput, null, 2)?.slice(0, 500));
       }
 
       let errorMsg = "Unknown error";
       let httpStatus: number | undefined;
       let errorCode: string | undefined;
       let isInventoryConflict = false;
+      let isHandleConflict = false;
 
       if (result.data && typeof result.data === "object") {
         const dataObj = result.data as Record<string, unknown>;
-        if (typeof dataObj.message === "string") {
+        // Check for nested error object
+        if (dataObj.error && typeof dataObj.error === "object") {
+          const errObj = dataObj.error as Record<string, unknown>;
+          errorMsg = String(errObj.message || errObj.code || JSON.stringify(errObj));
+        } else if (typeof dataObj.message === "string") {
           errorMsg = dataObj.message;
-          // Phát hiện lỗi "Inventory item already exists"
-          if (errorMsg.includes("Inventory item with sku") && errorMsg.includes("already exists")) {
-            isInventoryConflict = true;
-          }
         } else if (typeof dataObj.error === "string") {
           errorMsg = dataObj.error;
-          if (errorMsg.includes("Inventory item with sku") && errorMsg.includes("already exists")) {
-            isInventoryConflict = true;
-          }
         } else if (typeof dataObj.code === "string") {
           errorCode = dataObj.code;
           errorMsg = `[${errorCode}] ${dataObj.error || dataObj.message || "Unknown"}`;
         }
-        if (dataObj.type && typeof dataObj.type === "string") {
+        // Check for Medusa v2 error format: { type: string, message: string }
+        if (dataObj.type && typeof dataObj.type === "string" && dataObj.message) {
           errorCode = dataObj.type;
+          errorMsg = dataObj.message as string;
+        }
+        // Phát hiện lỗi "Inventory item already exists"
+        if (errorMsg.includes("Inventory item with sku") && errorMsg.includes("already exists")) {
+          isInventoryConflict = true;
+        }
+        // Phát hiện lỗi "Product with handle ... already exists"
+        if (errorMsg.includes("Product with handle") && errorMsg.includes("already exists")) {
+          isHandleConflict = true;
         }
       } else if (result.error) {
         errorMsg = result.error;
@@ -1367,6 +1787,87 @@ export async function batchCreateProducts(
         if (errorMsg.includes("Inventory item with sku") && errorMsg.includes("already exists")) {
           isInventoryConflict = true;
         }
+        if (errorMsg.includes("Product with handle") && errorMsg.includes("already exists")) {
+          isHandleConflict = true;
+        }
+      }
+
+      // HANDLE conflict — sản phẩm đã tồn tại theo handle trong Medusa
+      // Thường xảy ra khi xoá product nhưng handle chưa được giải phóng
+      if (isHandleConflict) {
+        const handle = String(apiInput.handle || product.handle || "");
+        if (handle) {
+          if (typeof window !== "undefined") {
+            console.debug(`[batchCreateProducts] HANDLE_CONFLICT for handle: "${handle}". Searching existing product...`);
+          }
+          
+          // Tìm product theo handle
+          const searchResult = await medusaRequest<{ products: Array<{ id: string; handle: string }>; count: number }>(
+            `/admin/products?handle=${encodeURIComponent(handle)}&limit=1`,
+            config
+          );
+          
+          if (searchResult.success && searchResult.data?.products && searchResult.data.products.length > 0) {
+            const existingId = searchResult.data.products[0].id;
+            if (typeof window !== "undefined") {
+              console.debug(`[batchCreateProducts] Found existing product with handle "${handle}": ${existingId}`);
+            }
+            log(`Sản phẩm "${product.title}" đã tồn tại (handle="${handle}", id=${existingId}). Mapping và skip.`);
+            ids.push(existingId);
+            if (wooId) {
+              wooIdToMedusaId[wooId] = existingId;
+            }
+            skipped++;
+            options?.onProgress?.(i + 1, products.length, "skip", product.title);
+            failedProducts.push({
+              wooId: wooId || 0,
+              title: product.title,
+              sku: product.originalSku || product.variants?.[0]?.originalSku || "",
+              error: `HANDLE_CONFLICT: handle="${handle}" đã tồn tại trong product ${existingId}`,
+            });
+            continue;
+          } else {
+            if (typeof window !== "undefined") {
+              console.debug(`[batchCreateProducts] Handle conflict but product not found by handle "${handle}". Checking by query...`);
+            }
+            // Thử tìm bằng title query
+            const titleQuery = encodeURIComponent(product.title || "");
+            const altResult = await medusaRequest<{ products: Array<{ id: string; title: string }>; count: number }>(
+              `/admin/products?q=${titleQuery}&limit=1`,
+              config
+            );
+            if (altResult.success && altResult.data?.products && altResult.data.products.length > 0) {
+              const existingId = altResult.data.products[0].id;
+              if (typeof window !== "undefined") {
+                console.debug(`[batchCreateProducts] Found by title "${product.title}": ${existingId}`);
+              }
+              log(`Sản phẩm "${product.title}" đã tồn tại (id=${existingId}). Mapping và skip.`);
+              ids.push(existingId);
+              if (wooId) {
+                wooIdToMedusaId[wooId] = existingId;
+              }
+              skipped++;
+              options?.onProgress?.(i + 1, products.length, "skip", product.title);
+              failedProducts.push({
+                wooId: wooId || 0,
+                title: product.title,
+                sku: product.originalSku || product.variants?.[0]?.originalSku || "",
+                error: `HANDLE_CONFLICT_RESOLVED: đã tìm thấy bằng title query, product ${existingId}`,
+              });
+              continue;
+            }
+          }
+          log(`Handle conflict cho "${product.title}" nhưng không tìm thấy product. Bỏ qua.`);
+        }
+        skipped++;
+        options?.onProgress?.(i + 1, products.length, "skip", product.title);
+        failedProducts.push({
+          wooId: wooId || 0,
+          title: product.title,
+          sku: product.originalSku || product.variants?.[0]?.originalSku || "",
+          error: `HANDLE_CONFLICT_UNRESOLVED: ${errorMsg}`,
+        });
+        continue;
       }
 
       // SKU conflict — check if inventory_item exists but product is missing (orphan scenario)
@@ -1430,6 +1931,7 @@ export async function batchCreateProducts(
             );
             skipped++;
             progress.failCount++;
+            options?.onProgress?.(i + 1, products.length, "skip", product.title);
             failedProducts.push({
               wooId: wooId || 0,
               title: product.title,
@@ -1452,6 +1954,7 @@ export async function batchCreateProducts(
           }
           skipped++;
           progress.failCount++;
+          options?.onProgress?.(i + 1, products.length, "skip", product.title);
           failedProducts.push({
             wooId: wooId || 0,
             title: product.title,
@@ -1478,6 +1981,8 @@ export async function batchCreateProducts(
         code: errorCode,
         wooId,
       });
+      
+      options?.onProgress?.(i + 1, products.length, "fail", product.title, errorMsg);
     }
   }
 
@@ -1485,9 +1990,11 @@ export async function batchCreateProducts(
     console.debug("[batchCreateProducts] Done. Created:", created, "Failed:", errors.length);
   }
 
+  // Success = true nếu có ít nhất 1 sản phẩm được tạo thành công
+  // Điều này cho phép migration tiếp tục ngay cả khi một số sản phẩm lỗi
   return {
-    success: errors.length === 0,
-    data: { created, updated: 0, failed: errors.length, errors, ids },
+    success: created > 0 || ids.length > 0,
+    data: { created, updated: 0, failed: errors.length, skipped, errors, ids, wooIdToMedusaId },
   };
 }
 
@@ -1502,7 +2009,10 @@ export async function uploadImage(
     const response = await fetch(imageUrl);
     const blob = await response.blob();
     const formData = new FormData();
-    formData.append("file", blob, "image.jpg");
+    // Infer extension from content-type header
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    const ext = mimeTypeToExt(contentType);
+    formData.append("file", blob, `image.${ext}`);
 
     const baseUrl = config.backendUrl.replace(/\/$/, "");
     const uploadResponse = await fetch(`${baseUrl}/admin/uploads`, {
@@ -1605,26 +2115,45 @@ export async function batchAssignProductCategories(
 
 /**
  * Delete migrated products by their Medusa IDs.
+ * Uses concurrent processing for speed.
  */
 export async function deleteProducts(
   config: MedusaConfig,
   productIds: string[]
 ): Promise<MedusaApiResponse<{ deleted: number }>> {
+  if (productIds.length === 0) {
+    return { success: true, data: { deleted: 0 } };
+  }
+
+  const CONCURRENCY = 10;
   let deleted = 0;
   const errors: string[] = [];
 
-  for (const id of productIds) {
-    const result = await medusaRequest(
-      `/admin/products/${id}`,
-      config,
-      { method: "DELETE" }
-    );
+  // Process in batches with concurrency
+  const batches: string[][] = [];
+  for (let i = 0; i < productIds.length; i += CONCURRENCY) {
+    batches.push(productIds.slice(i, i + CONCURRENCY));
+  }
 
-    if (result.success) {
-      deleted++;
-    } else {
-      errors.push(result.error || "Delete failed");
-    }
+  for (const batch of batches) {
+    const promises = batch.map(async (id) => {
+      const result = await medusaRequest(
+        `/admin/products/${id}`,
+        config,
+        { method: "DELETE" }
+      );
+      if (result.success) {
+        deleted++;
+      } else {
+        errors.push(result.error || "Delete failed");
+      }
+      return result.success;
+    });
+    await Promise.all(promises);
+  }
+
+  if (typeof window !== "undefined") {
+    console.debug(`[deleteProducts] Deleted: ${deleted}/${productIds.length}`);
   }
 
   return {
@@ -1635,28 +2164,132 @@ export async function deleteProducts(
 }
 
 /**
- * Delete migrated categories.
+ * Delete ALL categories in Medusa with MAXIMUM PARALLEL processing.
+ * Deletes all categories at once regardless of hierarchy.
+ */
+export async function deleteAllCategories(
+  config: MedusaConfig,
+  onProgress?: (deleted: number, total: number) => void
+): Promise<MedusaApiResponse<{ deleted: number }>> {
+  // Get all categories first
+  const allCats = await listAllCategories(config, 1000);
+  if (!allCats.success || !allCats.data || allCats.data.length === 0) {
+    return { success: true, data: { deleted: 0 } };
+  }
+
+  const categoryIds = allCats.data.map((c) => c.id);
+  const total = categoryIds.length;
+  let deleted = 0;
+  const errors: string[] = [];
+
+  // Delete ALL categories in parallel - maximum speed!
+  await Promise.all(
+    categoryIds.map(async (id) => {
+      const result = await medusaRequest(
+        `/admin/product-categories/${id}`,
+        config,
+        { method: "DELETE" }
+      );
+      if (result.success) {
+        deleted++;
+        onProgress?.(deleted, total);
+      } else {
+        errors.push(result.error || "Delete failed");
+      }
+    })
+  );
+
+  if (typeof window !== "undefined") {
+    console.debug(`[deleteAllCategories] Deleted: ${deleted}/${categoryIds.length}`);
+  }
+
+  return {
+    success: errors.length === 0,
+    data: { deleted },
+    error: errors.length > 0 ? errors.join("; ") : undefined,
+  };
+}
+
+/**
+ * Delete ALL products in Medusa with MAXIMUM PARALLEL processing.
+ */
+export async function deleteAllProducts(
+  config: MedusaConfig,
+  onProgress?: (deleted: number, total: number, lastId?: string) => void
+): Promise<MedusaApiResponse<{ deleted: number }>> {
+  // Get all products first
+  const allProds = await listAllProducts(config, 1000);
+  if (!allProds.success || !allProds.data || allProds.data.length === 0) {
+    return { success: true, data: { deleted: 0 } };
+  }
+
+  const productIds = allProds.data.map((p) => p.id);
+  const total = productIds.length;
+  let deleted = 0;
+  const errors: string[] = [];
+  const progressLock = { count: 0 };
+
+  // Delete ALL products in parallel - maximum speed!
+  // Report progress after each deletion
+  await Promise.all(
+    productIds.map(
+      async (id): Promise<void> => {
+        const result = await medusaRequest(
+          `/admin/products/${id}`,
+          config,
+          { method: "DELETE" }
+        );
+        const idx = progressLock.count++;
+        if (result.success) {
+          deleted++;
+          onProgress?.(deleted, total, id);
+        } else {
+          errors.push(result.error || "Delete failed");
+        }
+      }
+    )
+  );
+
+  if (typeof window !== "undefined") {
+    console.debug(`[deleteAllProducts] Deleted: ${deleted}/${productIds.length}`);
+  }
+
+  return {
+    success: errors.length === 0,
+    data: { deleted },
+    error: errors.length > 0 ? errors.join("; ") : undefined,
+  };
+}
+
+/**
+ * Delete categories by IDs (with concurrent processing).
  */
 export async function deleteCategories(
   config: MedusaConfig,
   categoryIds: string[]
 ): Promise<MedusaApiResponse<{ deleted: number }>> {
+  if (categoryIds.length === 0) {
+    return { success: true, data: { deleted: 0 } };
+  }
+
   let deleted = 0;
   const errors: string[] = [];
 
-  for (const id of categoryIds) {
-    const result = await medusaRequest(
-      `/admin/product-categories/${id}`,
-      config,
-      { method: "DELETE" }
-    );
-
-    if (result.success) {
-      deleted++;
-    } else {
-      errors.push(result.error || "Delete failed");
-    }
-  }
+  // Delete all in parallel
+  await Promise.all(
+    categoryIds.map(async (id) => {
+      const result = await medusaRequest(
+        `/admin/product-categories/${id}`,
+        config,
+        { method: "DELETE" }
+      );
+      if (result.success) {
+        deleted++;
+      } else {
+        errors.push(result.error || "Delete failed");
+      }
+    })
+  );
 
   return {
     success: errors.length === 0,

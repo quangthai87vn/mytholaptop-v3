@@ -1,8 +1,254 @@
 # MTL Next.js Commerce - Tiến Độ Project
 
-> **Cập nhật lần cuối:** 2026-05-03 16:00 (UTC+7)
+> **Cập nhật lần cuối:** 2026-05-07 16:30 (UTC+7)
 > **Agent:** c2283fc2-94d8-422d-98ca-91fb159b20c2
-> **Task:** Migration — WordPress media structure, deduplication, overwrite on duplicate
+> **Task:** Admin UI Header Redesign - Professional 3-column layout
+
+---
+
+## Task 2: Admin UI Header Redesign (7 May 2026)
+
+### Tổng quan
+
+Redesign header admin-ui thành layout 3 cột chuyên nghiệp theo phong cách SaaS dashboard.
+
+---
+
+## 1. Đã Làm Gì
+
+### 1.1 Tạo mới 5 component header
+
+| File | Mô tả |
+|------|--------|
+| `components/layout/breadcrumbs.tsx` | Breadcrumb tự động từ pathname, nhãn tiếng Việt |
+| `components/layout/global-search.tsx` | Command palette (Ctrl+K), 40+ mục tìm kiếm |
+| `components/layout/quick-actions.tsx` | Dropdown với 6 hành động nhanh |
+| `components/layout/notification-center.tsx` | Type definitions + mock notification data |
+| `components/layout/user-menu.tsx` | User profile dropdown với avatar, role |
+
+### 1.2 Redesign hoàn toàn admin-header.tsx
+
+**Layout 3 cột:**
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ LEFT (auto)    │ CENTER (flex-1)         │ RIGHT (ml-auto)          │
+│ Breadcrumb     │ Search bar 440px        │ Quick action │ Notif │ User │
+│ + Page title   │ (centered)              │ + badge     │        │       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Thay đổi chính:**
+
+1. **Header cao 68px**, border đậm dưới, nền trắng có backdrop-blur
+2. **LEFT**: Breadcrumb nhỏ gọn (text-xs) + tên trang đậm (visible trên ≥xl)
+3. **CENTER**: Search bar 440px centered, hover đỏ brand, placeholder "Tìm sản phẩm, khách hàng, đơn hàng, SKU...", shortcut `Ctrl K`
+4. **RIGHT**: Cân đối:
+   - Nút "Tạo nhanh" → đỏ brand `bg-red-600 hover:bg-red-700`
+   - Chuông thông báo với badge đỏ
+   - Avatar user + tên + vai trò (≥xl)
+5. **Search Dialog**: Popup Dialog khi click search, nhóm kết quả theo Sản phẩm / Khách hàng / Đơn hàng / Nội dung, hướng dẫn bàn phím
+6. **Quick actions mới**: Tạo đơn hàng, Thêm sản phẩm, Thêm khách hàng, Tạo bài viết AI, Gửi ZNS, Đồng bộ hàng hoá
+7. **Notifications mới**: Đơn hàng mới, Sản phẩm sắp hết hàng, ZNS gửi thất bại, Đồng bộ WooCommerce lỗi, Khách hàng cần chăm sóc
+8. **User menu đầy đủ**: Hồ sơ cá nhân, Cài đặt tài khoản, Đổi mật khẩu, Đăng xuất
+9. **Mobile responsive**: Hamburger + breadcrumb + icon search + avatar nhỏ gọn
+
+### 1.3 Kiến trúc gộp
+
+Các sub-component được inline vào `admin-header.tsx` để:
+- Tránh prop drilling
+- Tất cả state (notifications, search open) nằm trong 1 file
+- Responsive breakpoints dễ kiểm soát
+
+---
+
+## 2. File Đã Sửa / Tạo
+
+| File | Trạng thái | Ghi chú |
+|------|-----------|---------|
+| `components/layout/admin-header.tsx` | Viết lại hoàn toàn | 3-column layout, tất cả logic inline |
+| `components/layout/breadcrumbs.tsx` | Tạo mới | Tái sử dụng được ở chỗ khác |
+| `components/layout/global-search.tsx` | Tạo mới | Command palette component |
+| `components/layout/quick-actions.tsx` | Tạo mới | DropdownMenu quick actions |
+| `components/layout/notification-center.tsx` | Tạo mới | Types + mock data |
+| `components/layout/user-menu.tsx` | Tạo mới | User dropdown profile |
+| `components/layout/admin-layout.tsx` | Cập nhật nhỏ | Bỏ wrapper div của header |
+
+---
+
+## 3. Vấn Đề Còn Tồn Tại
+
+| # | Issue | Mức độ | Ghi chú |
+|---|-------|---------|---------|
+| 1 | File `website-ui` có lỗi `beVietnamPro is not defined` | Cao | Pre-existing, không liên quan admin-ui |
+| 2 | Dev server chạy `website-ui` (port 3001) thay vì `admin-ui` | Thấp | Terminal 17 đang chạy sai app |
+
+---
+
+## 4. Lệnh Test
+
+### 4.1 Build & TypeScript
+
+```bash
+# Build admin-ui (chạy từ root monorepo)
+cd d:\AI PROJECT\mytholaptop-v3
+pnpm --filter admin-ui build
+
+# Hoặc chạy trực tiếp trong admin-ui
+cd apps/admin-ui
+pnpm build
+```
+
+### 4.2 Development Server
+
+```bash
+# Terminal 1: Backend Medusa (port 9000)
+cd apps/backend-ui/apps/backend
+npm run dev
+
+# Terminal 2: Admin UI (port 3000) - DÙNG PUNPM
+cd apps/admin-ui
+pnpm dev
+
+# KHÔNG dùng: npm run dev (sẽ chạy website-ui)
+```
+
+### 4.3 Test Routes
+
+Mở browser tại `http://localhost:3000` và kiểm tra:
+
+- `/dashboard` - Header hiển thị "Tổng quan"
+- `/products` - Header hiển thị "Sản phẩm"
+- `/content` - Header hiển thị "Nội dung"
+- `/sales` - Header hiển thị "Bán hàng"
+- `/customers/activity-log` - Header hiển thị "Nhật ký tương tác"
+- `/settings` - Header hiển thị "Cài đặt"
+
+Kiểm tra:
+- [ ] Header cân đối, không có khoảng trắng trống lớn bên phải
+- [ ] Avatar user không bị trùng lặp
+- [ ] Dropdown "Tạo nhanh" mở đúng
+- [ ] Dropdown thông báo mở đúng
+- [ ] Dropdown user menu mở đúng
+- [ ] Click search → Dialog mở đúng
+- [ ] Ctrl+K → Dialog search mở đúng
+- [ ] Mobile: hamburger + icon search + avatar hiển thị đúng
+
+---
+
+## 5. Commit Message
+
+```
+feat(admin-ui): redesign header with professional 3-column SaaS layout
+
+- Redesign admin-header.tsx with LEFT/CENTER/RIGHT layout structure
+- Add inline breadcrumbs + page title display in header
+- Add centered 440px search bar with Ctrl+K shortcut and search dialog
+- Add SearchDialog component with grouped results (Sản phẩm/Khách hàng/Đơn hàng/Nội dung)
+- Add quick action dropdown: Tạo đơn hàng, Thêm sản phẩm, Thêm khách hàng, Tạo bài viết AI, Gửi ZNS, Đồng bộ
+- Add notification dropdown with 5 new notification types
+- Add user profile dropdown: Hồ sơ cá nhân, Cài đặt tài khoản, Đổi mật khẩu, Đăng xuất
+- Mobile responsive: hamburger + breadcrumb + icon search + compact avatar
+- Create reusable breadcrumbs.tsx, global-search.tsx, quick-actions.tsx, notification-center.tsx, user-menu.tsx
+- Header height 68px with backdrop-blur and border-bottom
+```
+
+---
+
+## 6. Bước Tiếp Theo
+
+### Ngắn hạn
+
+- [ ] Test header trên các route còn lại
+- [ ] Fix website-ui `beVietnamPro` error (pre-existing)
+- [ ] Đảm bảo dev server admin-ui chạy đúng port 3000
+
+### Trung hạn
+
+- [ ] Hoàn thiện sidebar collapse/expand animation
+- [ ] Thêm page title component cho các trang
+- [ ] Cải thiện notification service thực tế (API call)
+- [ ] Thêm real-time search với API
+
+---
+
+## 7. Changelog
+
+### 2026-05-07
+
+- **feat:** Admin UI header redesign - professional 3-column SaaS layout
+- **feat:** Breadcrumbs component với tên trang
+- **feat:** Search bar + SearchDialog với Ctrl+K shortcut
+- **feat:** Quick actions dropdown với 6 hành động
+- **feat:** Notification dropdown với 5 loại thông báo mới
+- **feat:** User menu dropdown với đầy đủ options
+- **feat:** Mobile responsive header
+- **fix:** Xóa duplicate standalone user avatar
+
+### 2026-05-03 (Chiều)
+
+- **feat:** WordPress media structure — lưu vào `wp-content/uploads/{year}/{month}/{filename}`
+- **feat:** Extract year/month từ WordPress URL gốc
+- **fix:** Overwrite thay vì tạo file mới khi trùng filename
+- **fix:** `rewriteHtmlImages()` mapping với original URLs thay vì hashes
+- **perf:** Deduplication — trùng URL chỉ tải 1 lần, reuse everywhere
+
+### 2026-05-03 (Sáng)
+
+- **fix:** Stock/inventory — Medusa v2 Inventory Module integration
+- **fix:** `getStockStatus()` fallback check `outofstock`/`onbackorder`
+- **refactor:** Migration UI simplified — chỉ 2 tuỳ chọn dữ liệu
+- **perf:** Default selectedTypes = `["categories", "products"]`
+
+---
+
+## 8. Lưu Ý Bảo Mật
+
+**KHÔNG push lên git:**
+- File `.env` chứa credentials
+- Thư mục `public/wp-content/uploads/`
+- Thư mục `public/uploads/`
+- File chứa JWT token hoặc API key
+
+**Đã thêm vào `.gitignore`**
+
+---
+
+## 9. Cách Chạy Monorepo
+
+### Khởi động
+
+```bash
+# Backend Medusa (port 9000)
+cd apps/backend-ui/apps/backend
+npm run dev
+
+# Admin UI (port 3000) - DÙNG PUNPM
+cd apps/admin-ui
+pnpm dev
+
+# Website UI (port 3001) - nếu cần
+cd apps/website-ui
+npm run dev
+```
+
+### Build
+
+```bash
+# Admin UI
+cd apps/admin-ui
+pnpm build
+
+# Toàn bộ monorepo
+cd d:\AI PROJECT\mytholaptop-v3
+pnpm build
+```
+
+---
+
+## Task 1: Migration (3 May 2026) — Lưu trữ
+
+*(Đã hoàn thành - xem commit trước)*
 
 ---
 

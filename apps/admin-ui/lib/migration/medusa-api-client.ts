@@ -586,7 +586,6 @@ export class MedusaApiClient {
   ): CreateProductInput {
     return {
       title: product.title,
-      subtitle: product.subtitle,
       description: product.description,
       handle: product.handle || this.slugify(product.title),
       status: product.status,
@@ -598,20 +597,23 @@ export class MedusaApiClient {
       thumbnail: product.thumbnail,
       categories: categoryIds.map((id) => ({ id })),
       tags: tagIds.filter((t) => t.id).length > 0 ? tagIds.filter((t) => t.id) : undefined,
-      variants: product.variants.map((v) => ({
-        title: v.title,
-        sku: v.sku,
-        ean: v.ean,
-        upc: v.upc,
-        barcode: v.barcode,
-        price: v.price,
-        original_price: v.original_price,
-        inventory_quantity: v.inventory_quantity,
-        allow_backorder: v.allow_backorder,
-        manage_inventory: v.manage_inventory,
-        weight: v.weight,
-        options: v.options,
-      })),
+      variants: product.variants.map((v) => {
+        // Convert price (number) to prices (array) for Medusa v2 API
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { price: _origPrice, original_price: _origOrigPrice, inventory_quantity: _invQty, allow_backorder: _backorder, manage_inventory: _manageInv, ...rest } = v;
+        return {
+          title: rest.title,
+          sku: rest.sku,
+          ean: rest.ean,
+          upc: rest.upc,
+          barcode: rest.barcode,
+          // Medusa v2 requires prices as array of price objects
+          prices: [{ amount: v.price, currency_code: "vnd" }],
+          weight: rest.weight,
+          options: rest.options,
+          metadata: rest.metadata,
+        };
+      }),
       images: product.images,
       options: product.options,
       metadata: product.metadata,

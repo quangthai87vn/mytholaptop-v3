@@ -4,6 +4,59 @@ import type { CategoryNode } from "@/components/categories/category-tree";
 export type StockStatus = "instock" | "outofstock" | "onbackorder" | "unknown" | "all";
 export type ProductStatus = "draft" | "published" | "proposed" | "rejected" | "archived" | "all";
 
+/**
+ * Rewrite image URLs inside HTML description for display.
+ * Converts:
+ * - Relative paths like /wp-content/uploads/... → /api/fetch-image?url=...
+ * - Absolute WooCommerce URLs → /api/fetch-image?url=...
+ * - Any path starting with / → /api/fetch-image?url=...
+ */
+export function rewriteDescriptionImages(html: string): string {
+  if (!html) return "";
+
+  // Rewrite <img src="..."> with relative or external URLs
+  let result = html.replace(
+    /<img([^>]*)\ssrc=["']([^"']+)["']([^>]*)>/gi,
+    (match, before, url, after) => {
+      if (!url || url.startsWith("data:") || url.startsWith("blob:")) {
+        return match;
+      }
+      const proxyUrl = `/api/fetch-image?url=${encodeURIComponent(url)}`;
+      return `<img${before}src="${proxyUrl}"${after}>`;
+    }
+  );
+
+  // Rewrite style="background-image: url(...)"
+  result = result.replace(
+    /style=["'][^"']*background-image\s*:\s*url\s*\(\s*['"]?([^'"()]+)['"]?\s*\)[^"']*["']/gi,
+    (match, url) => {
+      if (!url || url.startsWith("data:") || url.startsWith("blob:")) {
+        return match;
+      }
+      const proxyUrl = `/api/fetch-image?url=${encodeURIComponent(url)}`;
+      return match.replace(url, proxyUrl);
+    }
+  );
+
+  return result;
+}
+
+/**
+ * Resolve a single image URL for Next.js Image component.
+ * Converts relative paths to fetch-image proxy, keeps absolute URLs as-is.
+ */
+export function resolveImageUrlForDisplay(url: string | undefined | null): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    const encoded = encodeURIComponent(url);
+    return `/api/fetch-image?url=${encoded}`;
+  }
+  return url;
+}
+
 export interface AdaptedProduct {
   id: string;
   name: string;
@@ -180,7 +233,7 @@ export function adaptProduct(
     stock,
     stockStatus,
     status: p.status || "draft",
-    image: p.thumbnail || p.images?.[0]?.url || "",
+    image: resolveImageUrlForDisplay(p.thumbnail || p.images?.[0]?.url),
     tags,
     metadata: meta,
     rawProduct: p,

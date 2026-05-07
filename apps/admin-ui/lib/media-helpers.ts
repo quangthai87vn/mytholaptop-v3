@@ -7,9 +7,10 @@
  * - hashUrl: tạo hash từ URL để làm key deduplication
  * - extractImageUrlsFromHtml: trích xuất tất cả URLs từ HTML
  * - rewriteHtmlImages: rewrite HTML với URL mapping
+ * - buildImageUploadPath: tạo full upload path từ ImageUploadConfig
  */
 
-import type { MediaUsageType } from "@/types/media-mapping";
+import type { MediaUsageType, ImageUploadConfig } from "@/types/media-mapping";
 
 // ============================================================
 // URL NORMALIZATION & HASHING
@@ -110,7 +111,7 @@ export function sanitizeFileName(rawFileName: string, maxLen = 120): string {
   // Final cleanup
   base = base.replace(/^-+|-+$/g, "");
 
-  return base || "unnamed-image";
+  return (base || "unnamed-image") + ext;
 }
 
 /** Loại bỏ dấu tiếng Việt và ký tự có dấu */
@@ -148,9 +149,24 @@ export function inferMimeType(filename: string): string {
     bmp: "image/bmp",
     ico: "image/x-icon",
     tiff: "image/tiff",
-   tif: "image/tiff",
+    tif: "image/tiff",
   };
   return MIME_MAP[ext] || "application/octet-stream";
+}
+
+/** Infer extension từ MIME type */
+export function mimeTypeToExt(mimeType: string): string {
+  const MIME_TO_EXT: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/svg+xml": "svg",
+    "image/bmp": "bmp",
+    "image/x-icon": "ico",
+    "image/tiff": "tiff",
+  };
+  return MIME_TO_EXT[mimeType.toLowerCase()] || "jpg";
 }
 
 // ============================================================
@@ -158,20 +174,33 @@ export function inferMimeType(filename: string): string {
 // ============================================================
 
 /**
- * Build relative path cho uploaded image.
- * Format: /uploads/migration/wordpress/media/{urlHash}/{sanitizedFileName}
- */
-/**
  * Build relative path cho WordPress media structure.
  * Format: /wp-content/uploads/{year}/{month}/{filename}
- * 
- * NOTE: Path được derive từ source URL trong upload route,
- * helper này chỉ dùng để reference.
+ *
+ * Extracts year/month from source URL if available (e.g. /wp-content/uploads/2024/07/image.jpg)
  */
-export function buildRelativePath(urlHash: string, sanitizedFileName: string): string {
-  // Deprecated - path được tạo trong upload route từ source URL
-  // Giữ lại cho backward compatibility
-  return `/wp-content/uploads/${sanitizedFileName}`;
+export function buildRelativePath(urlHash: string, sanitizedFileName: string, sourceUrl?: string): string {
+  if (sourceUrl) {
+    try {
+      const url = new URL(sourceUrl);
+      const parts = url.pathname.split("/").filter(Boolean);
+      const uploadsIdx = parts.findIndex(p => p === "uploads");
+      if (uploadsIdx !== -1 && parts.length >= uploadsIdx + 3) {
+        const year = parts[uploadsIdx + 1];
+        const month = parts[uploadsIdx + 2];
+        if (year && month && /^\d{4}$/.test(year) && /^\d{2}$/.test(month)) {
+          return `/wp-content/uploads/${year}/${month}/${sanitizedFileName}`;
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  // Fallback: use current year/month
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = (now.getMonth() + 1).toString().padStart(2, "0");
+  return `/wp-content/uploads/${year}/${month}/${sanitizedFileName}`;
 }
 
 /**
@@ -214,10 +243,20 @@ export function extractImageUrlsFromHtml(html: string): string[] {
 
   const urls = new Set<string>();
 
+  // Decode HTML entities in URL values — WooCommerce HTML often has &amp; instead of &
+  // This converts &amp; → &, &lt; → <, &gt; → > etc.
+  const decoded = html
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'");
+
   // <img src="..."> và <img data-src="...">
   const imgRegex = /<img[^>]+(?:src|data-src)=["']([^"']+)["'][^>]*>/gi;
   let match;
-  while ((match = imgRegex.exec(html)) !== null) {
+  while ((match = imgRegex.exec(decoded)) !== null) {
     const fullMatch = match[0];
     const srcMatch = /src=["']([^"']+)["']/i.exec(fullMatch);
     const dataSrcMatch = /data-src=["']([^"']+)["']/i.exec(fullMatch);
@@ -227,7 +266,7 @@ export function extractImageUrlsFromHtml(html: string): string[] {
 
   // <source srcset="url1 size1, url2 size2"> và <img srcset="...">
   const srcsetRegex = /<(?:img|source)[^>]+srcset=["']([^"']+)["'][^>]*>/gi;
-  while ((match = srcsetRegex.exec(html)) !== null) {
+  while ((match = srcsetRegex.exec(decoded)) !== null) {
     const srcsetValue = match[1];
     const entries = parseSrcset(srcsetValue);
     entries.forEach((e) => urls.add(e.url));
@@ -235,7 +274,7 @@ export function extractImageUrlsFromHtml(html: string): string[] {
 
   // style="background-image: url(...)"
   const bgRegex = /style=["'][^"']*background-image\s*:\s*url\s*\(\s*['"]?([^'"()]+)['"]?\s*\)[^"']*["']/gi;
-  while ((match = bgRegex.exec(html)) !== null) {
+  while ((match = bgRegex.exec(decoded)) !== null) {
     if (match[1]) urls.add(match[1]);
   }
 
@@ -268,14 +307,32 @@ export function rewriteHtmlImages(
 
   function resolveUrl(rawUrl: string): string {
     if (!rawUrl) return rawUrl;
-    // Relative URL
-    if (rawUrl.startsWith("//")) {
-      return "https:" + rawUrl;
+    // Decode HTML entities first (e.g. &amp; → &)
+    const decoded = rawUrl
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&apos;/g, "'");
+    // Relative URL starting with // → add protocol
+    if (decoded.startsWith("//")) {
+      return "https:" + decoded;
     }
-    if (rawUrl.startsWith("/")) {
-      return (baseUrl.replace(/\/$/, "")) + rawUrl;
+    // For URLs starting with / (like /wp-content/uploads/...):
+    // Extract the /wp-content/uploads/... path only (don't prepend baseUrl)
+    if (decoded.startsWith("/")) {
+      const relativeMatch = decoded.match(/\/wp-content\/uploads\/.+/);
+      if (relativeMatch) return relativeMatch[0];
+      return decoded;
     }
-    return rawUrl;
+    // Full URL — extract relative path if it contains wp-content/uploads
+    if (decoded.startsWith("http://") || decoded.startsWith("https://")) {
+      const relativeMatch = decoded.match(/\/wp-content\/uploads\/.+/);
+      if (relativeMatch) return relativeMatch[0];
+      return decoded;
+    }
+    return decoded;
   }
 
   function replaceUrl(rawUrl: string): string {
@@ -446,15 +503,184 @@ export function isValidFileSize(fileSize: number, maxSize: number): boolean {
 /**
  * Build public URL cho ảnh trong Medusa.
  * Dùng để hiển thị ảnh trên giao diện.
+ *
+ * IMPORTANT: Luôn trả về RELATIVE PATH (bắt đầu bằng /),
+ * KHÔNG trả về full URL.
  */
 export function buildMediaUrl(
   relativePath: string,
   medusaBackendUrl: string
 ): string {
   if (!relativePath) return "";
-  if (relativePath.startsWith("http")) return relativePath;
+  // Already absolute URL — extract relative path
+  if (relativePath.startsWith("http://") || relativePath.startsWith("https://")) {
+    const relativeMatch = relativePath.match(/\/wp-content\/uploads\/.+/);
+    if (relativeMatch) return relativeMatch[0];
+    try {
+      return new URL(relativePath).pathname;
+    } catch {
+      return relativePath;
+    }
+  }
+  // Relative path starting with / — use as-is
+  if (relativePath.startsWith("/")) {
+    // Fix double-slash
+    const cleaned = relativePath.replace(/\/+/g, "/");
+    return cleaned;
+  }
+  // Plain path — add leading slash
+  return `/${relativePath}`;
+}
 
-  const base = medusaBackendUrl.replace(/\/$/, "");
-  const path = relativePath.startsWith("/") ? relativePath : `/${relativePath}`;
-  return `${base}${path}`;
+// ============================================================
+// IMAGE UPLOAD PATH BUILDER (ImageUploadConfig support)
+// ============================================================
+
+interface ImageUploadPath {
+  /** Relative path for database (e.g. /uploads/medusa/products/2026/05/abc.webp) */
+  relativePath: string;
+  /** Subdirectory (e.g. 2026/05) */
+  subDir: string;
+  /** Final filename */
+  fileName: string;
+  /** Full physical absolute path */
+  absolutePath: string;
+}
+
+/**
+ * Extract year/month from WordPress source URL path.
+ * E.g. /wp-content/uploads/2026/05/image.jpg → { year: "2026", month: "05" }
+ */
+export function extractYearMonthFromUrl(sourceUrl: string): { year: string; month: string } | null {
+  try {
+    const urlParsed = new URL(sourceUrl);
+    const pathParts = urlParsed.pathname.split("/").filter(Boolean);
+    const uploadsIdx = pathParts.findIndex(p => p === "uploads");
+    if (uploadsIdx !== -1 && pathParts.length >= uploadsIdx + 3) {
+      const year = pathParts[uploadsIdx + 1] || "";
+      const month = pathParts[uploadsIdx + 2] || "";
+      if (/^\d{4}$/.test(year) && /^\d{2}$/.test(month)) {
+        return { year, month };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Build subdirectory from folder pattern, optionally using URL metadata.
+ */
+export function buildSubDirFromPattern(
+  folderPattern: string,
+  sourceUrl?: string
+): string {
+  let year: string;
+  let month: string;
+  let day = "01";
+
+  if (sourceUrl) {
+    const yearMonth = extractYearMonthFromUrl(sourceUrl);
+    if (yearMonth) {
+      year = yearMonth.year;
+      month = yearMonth.month;
+    } else {
+      const now = new Date();
+      year = now.getFullYear().toString();
+      month = (now.getMonth() + 1).toString().padStart(2, "0");
+    }
+  } else {
+    const now = new Date();
+    year = now.getFullYear().toString();
+    month = (now.getMonth() + 1).toString().padStart(2, "0");
+  }
+
+  return folderPattern
+    .replace(/\{year\}/g, year)
+    .replace(/\{month\}/g, month)
+    .replace(/\{day\}/g, day);
+}
+
+/**
+ * Apply filename mode to generate final filename.
+ */
+export function applyImageFileNameMode(
+  mode: ImageUploadConfig["imageFileNameMode"],
+  originalFileName: string,
+  sourceUrl: string,
+  productSlug?: string,
+  productSku?: string
+): string {
+  const { name, ext } = (() => {
+    const lastDot = originalFileName.lastIndexOf(".");
+    if (lastDot > 0 && lastDot < originalFileName.length - 1) {
+      return { name: originalFileName.slice(0, lastDot), ext: originalFileName.slice(lastDot).toLowerCase() };
+    }
+    return { name: originalFileName, ext: "" };
+  })();
+
+  switch (mode) {
+    case "keep-original-name":
+      return sanitizeFileName(originalFileName);
+
+    case "product-slug":
+      return sanitizeFileName(productSlug || name) + ext;
+
+    case "product-sku":
+      return sanitizeFileName(productSku || name) + ext;
+
+    case "source-hash":
+    default: {
+      // Generate short hash from source URL for uniqueness
+      let hash = 0;
+      const normalized = sourceUrl.toLowerCase();
+      for (let i = 0; i < normalized.length; i++) {
+        const char = normalized.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash = hash & hash;
+      }
+      const hexHash = Math.abs(hash).toString(16).padStart(8, "0").slice(0, 8);
+      return `${hexHash}_${sanitizeFileName(name)}${ext}`.slice(0, 120);
+    }
+  }
+}
+
+/**
+ * Build complete image upload path from ImageUploadConfig.
+ * Used by media-migration service to prepare upload formData.
+ *
+ * Returns the components needed to build the upload request.
+ */
+export function buildImageUploadPath(
+  config: ImageUploadConfig,
+  sourceUrl: string,
+  originalFileName: string,
+  productSlug?: string,
+  productSku?: string
+): ImageUploadPath {
+  const subDir = buildSubDirFromPattern(config.imageFolderPattern, sourceUrl);
+  const fileName = applyImageFileNameMode(
+    config.imageFileNameMode,
+    originalFileName,
+    sourceUrl,
+    productSlug,
+    productSku
+  );
+
+  const relativePath = `${config.uploadPublicPath.replace(/\/$/, "")}/${subDir}/${fileName}`;
+
+  return {
+    relativePath,
+    subDir,
+    fileName,
+    absolutePath: "", // Set by the server-side route
+  };
+}
+
+/**
+ * Check if a path looks like a relative path (starts with /, not //)
+ */
+export function isRelativePublicPath(path: string): boolean {
+  return path.startsWith("/") && !path.startsWith("//");
 }

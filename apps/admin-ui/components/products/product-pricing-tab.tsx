@@ -1,23 +1,40 @@
 "use client";
 
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { useCheckSku } from "@/hooks/use-medusa";
 import type { ProductEditFormData } from "./product-edit-form";
 
 interface ProductPricingTabProps {
   form: ProductEditFormData;
   onChange: (form: ProductEditFormData) => void;
+  excludeProductId?: string;
 }
 
-export function ProductPricingTab({ form, onChange }: ProductPricingTabProps) {
+export function ProductPricingTab({
+  form,
+  onChange,
+  excludeProductId,
+}: ProductPricingTabProps) {
   const setField = <K extends keyof ProductEditFormData>(
     key: K,
     value: ProductEditFormData[K]
   ) => {
     onChange({ ...form, [key]: value });
   };
+
+  // SKU validation
+  const { data: skuCheck, isLoading: isCheckingSku } = useCheckSku(
+    form.sku || "",
+    excludeProductId
+  );
+  const skuExists = skuCheck?.exists && (skuCheck?.duplicates?.length ?? 0) > 0;
+  const skuValid = form.sku && !skuExists;
+  const showSkuWarning = form.sku && skuExists;
 
   const regularPrice = parseFloat(form.regular_price || "0");
   const salePrice = parseFloat(form.sale_price || "0");
@@ -80,12 +97,41 @@ export function ProductPricingTab({ form, onChange }: ProductPricingTabProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="sku">SKU</Label>
-          <Input
-            id="sku"
-            placeholder="SKU-001"
-            value={form.sku || ""}
-            onChange={(e) => setField("sku", e.target.value)}
-          />
+          <div className="relative">
+            <Input
+              id="sku"
+              placeholder="SKU-001"
+              value={form.sku || ""}
+              onChange={(e) => setField("sku", e.target.value)}
+              className={
+                showSkuWarning
+                  ? "pr-10 border-destructive"
+                  : skuValid
+                    ? "pr-10 border-green-500"
+                    : ""
+              }
+            />
+            {form.sku && (
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                {isCheckingSku ? (
+                  <div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-foreground" />
+                ) : skuValid ? (
+                  <CheckCircle2 className="size-4 text-green-500" />
+                ) : showSkuWarning ? (
+                  <AlertCircle className="size-4 text-destructive" />
+                ) : null}
+              </div>
+            )}
+          </div>
+          {showSkuWarning && skuCheck?.duplicates && (
+            <div className="flex items-start gap-1 rounded bg-destructive/10 border border-destructive/20 p-2">
+              <AlertCircle className="size-3.5 text-destructive shrink-0 mt-0.5" />
+              <p className="text-xs text-destructive">
+                SKU đã tồn tại:{" "}
+                {skuCheck.duplicates.map((d) => d.title).join(", ")}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">

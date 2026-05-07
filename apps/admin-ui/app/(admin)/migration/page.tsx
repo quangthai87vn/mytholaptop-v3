@@ -24,6 +24,7 @@ import {
   runMigration,
   rollbackMigration,
 } from "@/services/migration.service";
+import { startMigration, migrateMediaOnly } from "@/services/migration-manager";
 import {
   saveMigrationHistory,
   loadMigrationHistory,
@@ -32,6 +33,7 @@ import {
   updateMigrationHistoryLogs,
   loadIdMapping,
 } from "@/services/medusa.service";
+import type { MigrationCallback, ProgressCallback } from "@/services/migration.service";
 import {
   testConnection,
   fetchCategories,
@@ -50,7 +52,12 @@ import type {
   IdMapping,
   MigrationMode,
 } from "@/types";
-import { DEFAULT_MEDIA_OPTIONS, type MediaMigrationOptions } from "@/types/media-mapping";
+import {
+  DEFAULT_MEDIA_OPTIONS,
+  DEFAULT_IMAGE_UPLOAD_CONFIG,
+  type MediaMigrationOptions,
+  type ImageUploadConfig,
+} from "@/types/media-mapping";
 
 // Default state
 const DEFAULT_PROGRESS: MigrationProgress = {
@@ -125,6 +132,30 @@ export default function MigrationPage() {
     if (savedMapping) {
       setMappingData(savedMapping);
     }
+
+    // Load saved migration options from localStorage
+    try {
+      const savedOpts = localStorage.getItem("mtl_migration_options");
+      if (savedOpts) {
+        const opts = JSON.parse(savedOpts);
+        if (opts.selectedTypes && Array.isArray(opts.selectedTypes)) {
+          setSelectedTypes(opts.selectedTypes);
+        }
+        if (opts.conflictStrategy) setConflictStrategy(opts.conflictStrategy);
+        if (typeof opts.batchSize === "number") setBatchSize(opts.batchSize);
+        if (typeof opts.skipOnError === "boolean") setSkipOnError(opts.skipOnError);
+        if (typeof opts.preserveImages === "boolean") setPreserveImages(opts.preserveImages);
+        if (opts.mediaOptions) setMediaOptions(opts.mediaOptions);
+      }
+
+      // Load image upload config
+      const savedImageConfig = localStorage.getItem("mtl_image_upload_config");
+      if (savedImageConfig) {
+        setImageConfig({ ...DEFAULT_IMAGE_UPLOAD_CONFIG, ...JSON.parse(savedImageConfig) });
+      }
+    } catch {
+      // ignore localStorage errors
+    }
   }, []);
 
   // Preview data
@@ -133,13 +164,10 @@ export default function MigrationPage() {
   const [totalProducts, setTotalProducts] = useState(0);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
-  // Migration options
+  // Migration options - default: Sản phẩm + Danh mục
   const [selectedTypes, setSelectedTypes] = useState<MigrationDataType[]>([
     "categories",
     "products",
-    "mainImage",
-    "gallery",
-    "shortDesc",
   ]);
   const [conflictStrategy, setConflictStrategy] =
     useState<ConflictStrategy>("update");
@@ -148,6 +176,21 @@ export default function MigrationPage() {
   const [skipOnError, setSkipOnError] = useState(true);
   const [preserveImages, setPreserveImages] = useState(false); // Default: Tải ảnh về Medusa
   const [mediaOptions, setMediaOptions] = useState<MediaMigrationOptions>(DEFAULT_MEDIA_OPTIONS);
+  const [imageConfig, setImageConfig] = useState<ImageUploadConfig>(DEFAULT_IMAGE_UPLOAD_CONFIG);
+
+  // Save migration options to localStorage whenever they change
+  useEffect(() => {
+    const opts = {
+      selectedTypes,
+      conflictStrategy,
+      batchSize,
+      skipOnError,
+      preserveImages,
+      mediaOptions,
+    };
+    localStorage.setItem("mtl_migration_options", JSON.stringify(opts));
+    localStorage.setItem("mtl_image_upload_config", JSON.stringify(imageConfig));
+  }, [selectedTypes, conflictStrategy, batchSize, skipOnError, preserveImages, mediaOptions, imageConfig]);
 
   // Handler for preserveImages - sync với mediaOptions
   const handlePreserveImagesChange = useCallback((value: boolean) => {
@@ -295,7 +338,8 @@ export default function MigrationPage() {
     });
 
     try {
-      const result = await runMigration(
+      // Use MigrationManager singleton - state persists when switching tabs
+      const result = await startMigration(
         {
           wordpressUrl,
           wooConsumerKey: wooKey,
@@ -304,6 +348,8 @@ export default function MigrationPage() {
           medusaAdminEmail: medusaEmail,
           medusaAdminPassword: medusaPassword,
           medusaBackendUrl: medusaUrl,
+          /** Admin-UI URL — dùng làm CDN cho ảnh */
+          adminUiUrl: window.location.origin,
         },
         {
           selectedTypes,
@@ -313,8 +359,9 @@ export default function MigrationPage() {
           skipOnError,
           preserveImages,
           mediaOptions,
+          imageConfig,
         },
-        (log) => {
+        (log: MigrationLog) => {
           if (isCancelledRef.current) return;
           setLogs((prev) => {
             const updated = [...prev, log];
@@ -322,7 +369,7 @@ export default function MigrationPage() {
             return updated;
           });
         },
-        (prog) => {
+        (prog: MigrationProgress) => {
           if (isCancelledRef.current) return;
           setProgress(prog);
           if (prog.errors.length > 0) {
@@ -447,10 +494,10 @@ export default function MigrationPage() {
           medusaAdminPassword: medusaPassword,
           medusaBackendUrl: medusaUrl,
         },
-        (log) => {
+        (log: MigrationLog) => {
           setLogs((prev) => [...prev, log]);
         },
-        (prog) => {
+        (prog: MigrationProgress) => {
           setProgress((prev) => ({
             ...prev,
             rollbackStats: {
@@ -558,6 +605,74 @@ export default function MigrationPage() {
     clearIdMapping();
   }, []);
 
+  // Handle migrate media only (chạy riêng sau khi products đã migrate xong)
+  const handleMigrateMedia = useCallback(async () => {
+    setIsRunning(true);
+    setIsCancelled(false);
+    isCancelledRef.current = false;
+    setProgress((prev) => ({
+      ...prev,
+      phase: "media_migration",
+      mediaProgress: { totalProducts: 0, processedProducts: 0 },
+    }));
+    const startLog: MigrationLog = {
+      id: `log_${Date.now()}`,
+      step: "media_only",
+      action: "INFO",
+      status: "info",
+      message: "Bắt đầu migrate ảnh riêng...",
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [...prev, startLog]);
+
+    try {
+      const result = await migrateMediaOnly(
+        {
+          wordpressUrl,
+          wooConsumerKey: wooKey,
+          wooConsumerSecret: wooSecret,
+          medusaAdminKey: medusaKey,
+          medusaAdminEmail: medusaEmail,
+          medusaAdminPassword: medusaPassword,
+          medusaBackendUrl: medusaUrl,
+          adminUiUrl: window.location.origin,
+        },
+        {
+          selectedTypes: ["products"],
+          conflictStrategy: "update",
+          migrationMode: "continue",
+          batchSize,
+          skipOnError,
+          preserveImages: false,
+          mediaOptions,
+        }
+      );
+
+      if (result.success) {
+        setProgress((prev) => ({ ...prev, phase: "done" }));
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: `log_${Date.now()}`,
+            step: "media_only",
+            action: "SUCCESS",
+            status: "success",
+            message: `Migrate ảnh hoàn tất! Đã cập nhật ${result.stats.updated} sản phẩm.`,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      } else {
+        setProgress((prev) => ({ ...prev, phase: "failed" }));
+      }
+    } catch {
+      setProgress((prev) => ({ ...prev, phase: "failed" }));
+    } finally {
+      if (!isCancelledRef.current) {
+        setIsRunning(false);
+      }
+    }
+  }, [wordpressUrl, wooKey, wooSecret, medusaKey, medusaEmail, medusaPassword, medusaUrl, batchSize, skipOnError, mediaOptions]);
+
   const isConnected = connectionState.status === "success";
 
   return (
@@ -579,12 +694,21 @@ export default function MigrationPage() {
           skipOnError={skipOnError}
           preserveImages={preserveImages}
           mediaOptions={mediaOptions}
+          imageConfig={imageConfig}
           onTypeToggle={toggleType}
           onConflictChange={setConflictStrategy}
           onBatchSizeChange={setBatchSize}
           onSkipOnErrorChange={setSkipOnError}
           onPreserveImagesChange={handlePreserveImagesChange}
           onMediaOptionsChange={setMediaOptions}
+          onImageConfigChange={(cfg) => {
+            setImageConfig(cfg);
+            // Update mediaOptions with the new image config
+            setMediaOptions((prev) => ({
+              ...prev,
+              imageUploadConfig: cfg,
+            }));
+          }}
           isRunning={isRunning}
         />
       </div>
@@ -660,6 +784,7 @@ export default function MigrationPage() {
                 totalProducts={totalProducts}
                 isRunning={isRunning}
                 onStart={handleStartMigration}
+                onMigrateMedia={handleMigrateMedia}
                 onCancel={handleCancel}
                 onRollback={handleRollback}
                 isConnected={isConnected}

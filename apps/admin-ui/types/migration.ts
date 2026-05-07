@@ -2,6 +2,8 @@
 // Migration Configuration
 // ============================================================
 
+import type { ImageUploadConfig } from "@/types/media-mapping";
+
 export interface MigrationConfig {
   wordpressUrl: string;
   wooConsumerKey: string;
@@ -10,6 +12,8 @@ export interface MigrationConfig {
   medusaAdminEmail?: string;
   medusaAdminPassword?: string;
   medusaBackendUrl: string;
+  /** Admin-UI URL — dùng làm CDN cho ảnh đã migrate */
+  adminUiUrl?: string;
 }
 
 export type ConflictStrategy = "skip" | "update" | "create";
@@ -78,6 +82,17 @@ export interface WooProduct {
     height: string;
   };
   meta_data: WooMetaData[];
+}
+
+/**
+ * WooCommerce Product Tag from API
+ * https://woocommerce.github.io/woocommerce-rest-api-docs/#product-tags
+ */
+export interface WooTag {
+  id: number;
+  name: string;
+  slug: string;
+  count: number;
 }
 
 export interface WooImage {
@@ -225,12 +240,18 @@ export type MigrationPhase =
   | "transforming"
   | "uploading_categories"
   | "uploading"
+  | "migrating_categories"
+  | "migrating_tags"
+  | "migrating_products"
   | "media_migration"
   | "done"
   | "failed"
   | "rolling_back"
+  | "rolling_back_products"
+  | "rolling_back_categories"
   | "rollback_done"
-  | "rollback_failed";
+  | "rollback_failed"
+  | "cancelled";
 
 export interface RollbackStats {
   total: number;
@@ -253,6 +274,11 @@ export interface MigrationProgress {
   errors: MigrationError[];
   rollbackStats?: RollbackStats;
   rollbackProgress?: number;
+  /** Media migration progress tracking */
+  mediaProgress?: {
+    totalProducts: number;
+    processedProducts: number;
+  };
 }
 
 export interface MigrationError {
@@ -507,6 +533,8 @@ export interface MigrationOptions {
   skipOnError: boolean;
   /** @deprecated Use mediaOptions instead */
   preserveImages: boolean;
+  /** Cấu hình upload ảnh — từ popup Tuỳ chọn */
+  imageConfig?: ImageUploadConfig;
   /** Media migration options */
   mediaOptions?: {
     downloadThumbnails?: boolean;
@@ -520,5 +548,15 @@ export interface MigrationOptions {
      * When false: batch migrate images after all products are created.
      * Default: false */
     inlineProductMedia?: boolean;
+    onlyFromWordpressDomain?: boolean;
+    imageUploadConfig?: {
+      enabled?: boolean;
+      uploadRootDir?: string;
+      uploadPublicPath?: string;
+      imageFolderPattern?: string;
+      imageFileNameMode?: "keep-original-name" | "product-slug" | "source-hash" | "product-sku";
+      imageConflictStrategy?: "skip" | "overwrite" | "rename";
+      imageSaveMode?: "relative_path" | "absolute_url";
+    };
   };
 }

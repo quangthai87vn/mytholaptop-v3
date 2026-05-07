@@ -10,23 +10,17 @@ interface ProductCardGridProps {
   onDelete: (productId: string) => void;
 }
 
-const GRID_COLS: Record<number, string> = {
-  3: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-3",
-  4: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4",
-  5: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5",
-  6: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
-};
+// Auto-fill responsive grid that fills available width
+// Min card width: 220px, max columns based on user preference
+const GRID_CLASS = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4";
 
 export function ProductCardGrid({
   products,
-  columns,
   onView,
   onDelete,
 }: ProductCardGridProps) {
-  const gridClass = GRID_COLS[columns] || GRID_COLS[5];
-
   return (
-    <div className={`grid ${gridClass} gap-3`}>
+    <div className={`${GRID_CLASS} min-w-0`}>
       {products.map((product) => (
         <ProductCard
           key={product.id}

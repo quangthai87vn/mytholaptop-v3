@@ -18,10 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  formatCurrency,
-  cn,
-} from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import {
   getStockBadgeVariant,
   getStatusVariant,
@@ -40,14 +37,16 @@ interface ProductCardProps {
 
 export function ProductCard({ product, onView, onDelete }: ProductCardProps) {
   const router = useRouter();
+  const isOutOfStock = product.stockStatus === "outofstock" || product.stock === 0;
 
   return (
-    <Card className="group overflow-hidden transition-all hover:shadow-lg hover:border-primary/30">
+    <Card className="group overflow-hidden transition-all hover:shadow-lg hover:border-primary/30 flex flex-col h-full min-w-0">
       {/* Image */}
       <div
         className={cn(
-          "relative aspect-square overflow-hidden bg-muted cursor-pointer",
-          (product.stockStatus === "outofstock" || product.stock === 0) && "grayscale"
+          "relative overflow-hidden bg-muted cursor-pointer shrink-0",
+          "aspect-[4/3]",
+          isOutOfStock && "grayscale"
         )}
         onClick={() => onView(product)}
       >
@@ -58,21 +57,22 @@ export function ProductCard({ product, onView, onDelete }: ProductCardProps) {
             fill
             className={cn(
               "object-cover transition-transform duration-300 group-hover:scale-105",
-              (product.stockStatus === "outofstock" || product.stock === 0) && "grayscale"
+              isOutOfStock && "grayscale"
             )}
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            loading="eager"
           />
         ) : (
-          <div className="flex size-full items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center">
             <XCircle className="size-12 text-muted-foreground/30" />
           </div>
         )}
 
-        {/* Stock badge overlay */}
-        <div className="absolute top-1.5 left-1.5">
+        {/* Top badges */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1">
           <Badge
             variant={getStockBadgeVariant(product.stock, product.stockStatus)}
-            className="gap-0.5 text-[10px] px-1.5 py-0 shadow-sm"
+            className="gap-0.5 text-[10px] px-1.5 py-0 shadow-sm backdrop-blur-sm bg-background/80"
           >
             {product.stock > 0 && product.stock < 999
               ? `Còn ${product.stock}`
@@ -80,11 +80,10 @@ export function ProductCard({ product, onView, onDelete }: ProductCardProps) {
           </Badge>
         </div>
 
-        {/* Product status badge */}
-        <div className="absolute top-1.5 right-1.5">
+        <div className="absolute top-2 right-2">
           <Badge
             variant={getStatusVariant(product.status)}
-            className="gap-0.5 text-[10px] px-1.5 py-0 shadow-sm"
+            className="gap-0.5 text-[10px] px-1.5 py-0 shadow-sm backdrop-blur-sm bg-background/80"
           >
             {MEDUSA_STATUS_LABELS[product.status] || product.status}
           </Badge>
@@ -119,28 +118,31 @@ export function ProductCard({ product, onView, onDelete }: ProductCardProps) {
         </div>
       </div>
 
-      {/* Info */}
-      <CardContent className="p-2 space-y-1">
+      {/* Info - flexible height, content at bottom */}
+      <CardContent className="p-3 flex flex-col flex-1 min-w-0">
         {/* Category */}
         {product.category && (
-          <p className="text-xs text-primary font-medium bg-primary/5 px-1.5 py-0.5 rounded truncate">
+          <p className="text-xs text-primary font-medium bg-primary/5 px-1.5 py-0.5 rounded truncate mb-1">
             {product.category}
           </p>
         )}
 
         {/* Name */}
         <h3
-          className="line-clamp-2 text-xs font-semibold leading-snug text-foreground cursor-pointer hover:text-primary transition-colors"
+          className="line-clamp-2 text-sm font-semibold leading-snug text-foreground cursor-pointer hover:text-primary transition-colors"
           onClick={() => onView(product)}
         >
           {product.name}
         </h3>
 
-        {/* Price */}
-        <div>
+        {/* Spacer pushes content to bottom */}
+        <div className="flex-1" />
+
+        {/* Price - fixed height to prevent layout shift */}
+        <div className="h-12 flex flex-col justify-end">
           {product.price > 0 ? (
             <div className="flex flex-col">
-              <span className="text-sm font-bold text-primary">
+              <span className="text-base font-bold text-primary">
                 {formatCurrency(product.price)}
               </span>
               {product.compareAtPrice && product.compareAtPrice > product.price && (
@@ -156,7 +158,7 @@ export function ProductCard({ product, onView, onDelete }: ProductCardProps) {
 
         {/* Tags */}
         {product.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 mt-2">
             {product.tags.slice(0, 2).map((tag, i) => (
               <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">
                 {tag}
@@ -170,9 +172,9 @@ export function ProductCard({ product, onView, onDelete }: ProductCardProps) {
           </div>
         )}
 
-        {/* Bottom row */}
-        <div className="flex items-center justify-between pt-1 border-t">
-          <span className="text-xs text-muted-foreground truncate font-mono">
+        {/* Bottom row - always at bottom */}
+        <div className="flex items-center justify-between pt-2 mt-2 border-t">
+          <span className="text-xs text-muted-foreground truncate font-mono max-w-[60%]">
             {product.sku || "—"}
           </span>
           <DropdownMenu>

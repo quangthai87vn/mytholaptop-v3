@@ -28,26 +28,54 @@ import type {
 /**
  * Normalize an image URL from WooCommerce.
  * Handles relative URLs, absolute URLs, and different WordPress domain formats.
+ *
+ * IMPORTANT: Luôn trả về RELATIVE PATH (bắt đầu bằng /wp-content/uploads/...)
+ * KHÔNG trả về full URL (http://mytholaptop.vn/...)
  */
 export function normalizeImageUrl(src: string, wordpressBaseUrl: string): string {
   if (!src) return "";
 
-  // Already absolute and valid
+  // Already absolute — extract relative path from WordPress URL
   if (src.startsWith("http://") || src.startsWith("https://")) {
-    return src;
+    // Extract pathname from WordPress URL (e.g. https://mytholaptop.vn/wp-content/uploads/2026/01/image.webp → /wp-content/uploads/2026/01/image.webp)
+    const relativeMatch = src.match(/\/wp-content\/uploads\/.+/);
+    if (relativeMatch) {
+      return relativeMatch[0];
+    }
+    // Fallback: try to extract pathname
+    try {
+      const url = new URL(src);
+      return url.pathname;
+    } catch {
+      return src;
+    }
   }
 
   // Protocol-relative URL
   if (src.startsWith("//")) {
-    return "https:" + src;
+    const withProtocol = "https:" + src;
+    const relativeMatch = withProtocol.match(/\/wp-content\/uploads\/.+/);
+    if (relativeMatch) {
+      return relativeMatch[0];
+    }
+    try {
+      return new URL(withProtocol).pathname;
+    } catch {
+      return src;
+    }
   }
 
-  // Relative URL — prepend WordPress base URL
-  const base = wordpressBaseUrl.replace(/\/$/, "");
+  // Already a relative path (starts with /) — extract wp-content/uploads part if present
   if (src.startsWith("/")) {
-    return base + src;
+    const relativeMatch = src.match(/\/wp-content\/uploads\/.+/);
+    if (relativeMatch) {
+      return relativeMatch[0];
+    }
+    return src;
   }
-  return `${base}/${src}`;
+
+  // Plain relative path — prepend /wp-content/uploads/ prefix
+  return `/wp-content/uploads/${src}`;
 }
 
 /**
@@ -74,8 +102,9 @@ export function extractImageUrlsFromHtml(html: string): string[] {
 }
 
 /**
- * Transform image URLs in HTML description to use new domain.
- * Replaces WordPress domain with configured target domain.
+ * Transform image URLs in HTML description to use relative paths.
+ * IMPORTANT: Luôn giữ relative path (/wp-content/uploads/...) trong HTML,
+ * KHÔNG convert thành full URL (http://mytholaptop.vn/...)
  */
 export function transformDescriptionImages(
   html: string,
@@ -85,28 +114,38 @@ export function transformDescriptionImages(
   if (!html) return "";
 
   const srcBase = wordpressBaseUrl.replace(/\/$/, "");
-  const tgtBase = targetDomain.replace(/\/$/, "");
 
   let result = html;
 
-  // Replace absolute WordPress URLs in src attributes
+  // Extract relative path from WordPress URLs and replace them in HTML
+  // E.g. https://mytholaptop.vn/wp-content/uploads/2026/01/image.webp → /wp-content/uploads/2026/01/image.webp
+  // Pattern: match WordPress base URL + /wp-content/uploads/... and replace with just /wp-content/uploads/...
   if (srcBase) {
+    // Match full WordPress URL with /wp-content/uploads/ path and replace with relative path
     result = result.replace(
-      new RegExp(escapeRegExp(srcBase), "gi"),
-      tgtBase || srcBase
+      new RegExp(escapeRegExp(srcBase) + "(/wp-content/uploads/[^\\s\"'<>]+)", "gi"),
+      "$1"
+    );
+    // Also handle double-slash case: https://mytholaptop.vn//wp-content/... → /wp-content/...
+    result = result.replace(
+      /https?:\/\/[^\/]+\/\/wp-content\/uploads\//gi,
+      "/wp-content/uploads/"
     );
   }
 
-  // Fix relative URLs to absolute
+  // Fix relative URLs that don't have /wp-content/uploads/ prefix (add it)
+  // Pattern: src="/uploads/... → src="/wp-content/uploads/...
   result = result.replace(
-    /src=["'](?!\s*https?:\/\/)([^"']+)["']/gi,
-    `src="${srcBase}$1"`
+    /src=["']\/uploads\//gi,
+    'src="/wp-content/uploads/'
   );
-
-  // Fix data-src (lazy loading)
   result = result.replace(
-    /data-src=["'](?!\s*https?:\/\/)([^"']+)["']/gi,
-    `data-src="${srcBase}$1"`
+    /data-src=["']\/uploads\//gi,
+    'data-src="/wp-content/uploads/'
+  );
+  result = result.replace(
+    /href=["']\/uploads\//gi,
+    'href="/wp-content/uploads/'
   );
 
   return result;
@@ -247,9 +286,8 @@ export interface DescriptionTransformConfig {
 
 /**
  * Transform HTML description from WooCommerce to Medusa.
- * - Replaces WordPress domain URLs if needed
- * - Cleans up Gutenberg block comments
- * - Handles relative image URLs
+ * IMPORTANT: Luôn giữ relative path (/wp-content/uploads/...) trong HTML,
+ * KHÔNG convert thành full URL.
  */
 export function transformDescription(
   html: string,
@@ -257,27 +295,27 @@ export function transformDescription(
 ): string {
   if (!html) return "";
 
+  const srcBase = config.sourceDomain.replace(/\/$/, "");
+
   let result = html;
 
-  // Replace WordPress domain in image src and href attributes
-  if (config.sourceDomain && config.targetDomain) {
+  // Extract relative path from WordPress URLs in HTML (replace full URL → relative path)
+  if (srcBase) {
+    // Match WordPress URL + /wp-content/uploads/... and replace with just /wp-content/uploads/...
     result = result.replace(
-      new RegExp(escapeRegExp(config.sourceDomain), "g"),
-      config.targetDomain
+      new RegExp(escapeRegExp(srcBase) + "(/wp-content/uploads/[^\\s\"'<>]+)", "gi"),
+      "$1"
+    );
+    // Handle double-slash case: https://mytholaptop.vn//wp-content/... → /wp-content/...
+    result = result.replace(
+      /https?:\/\/[^\/]+\/\/wp-content\/uploads\//gi,
+      "/wp-content/uploads/"
     );
   }
 
-  // Convert relative URLs to absolute if targetDomain is set
-  if (config.targetDomain) {
-    result = result.replace(
-      /src=["'](?!\s*https?:\/\/)([^"']+)["']/gi,
-      `src="${config.targetDomain}$1"`
-    );
-    result = result.replace(
-      /href=["'](?!\s*https?:\/\/)([^"']+)["']/gi,
-      `href="${config.targetDomain}$1"`
-    );
-  }
+  // Normalize /uploads/ → /wp-content/uploads/ if needed
+  result = result.replace(/src=["']\/uploads\//gi, 'src="/wp-content/uploads/');
+  result = result.replace(/href=["']\/uploads\//gi, 'href="/wp-content/uploads/');
 
   // Remove Gutenberg block comments
   if (config.removeGutenbergBlocks) {
@@ -370,6 +408,8 @@ export interface ProductTransformConfig {
   descriptionConfig: DescriptionTransformConfig;
   defaultCurrency?: string;
   defaultStatus?: "draft" | "published";
+  /** Mapping of WooCommerce tag ID to Medusa tag ID */
+  tagMapping?: Record<number, string>;
 }
 
 /**
@@ -524,6 +564,17 @@ export function transformProduct(
     const tagNames = wooProduct.tags.map((t) => t.name).filter(Boolean);
     const tagIds = wooProduct.tags.map((t) => String(t.id)).filter((id) => id !== "undefined");
 
+    // Convert WooCommerce tag IDs to Medusa tag IDs if mapping is provided
+    const medusaTags: Array<{ id: string; value: string }> = [];
+    if (config.tagMapping) {
+      for (const wooTag of wooProduct.tags) {
+        const medusaId = config.tagMapping[wooTag.id];
+        if (medusaId) {
+          medusaTags.push({ id: medusaId, value: wooTag.name });
+        }
+      }
+    }
+
     medusaProduct.metadata = {
       ...(medusaProduct.metadata || {}),
       wordpress_tags: JSON.stringify(wooProduct.tags),
@@ -531,6 +582,11 @@ export function transformProduct(
       wordpress_tag_names: tagNames.join(","),
       wordpress_tag_ids: tagIds.join(","),
     };
+
+    // Add Medusa tags to product if we have the mapping
+    if (medusaTags.length > 0) {
+      medusaProduct.tags = medusaTags;
+    }
   }
 
   // Dimensions
@@ -709,6 +765,53 @@ export function sortCategoriesByHierarchy(
   return result;
 }
 
+/**
+ * Build a map of category ID to its hierarchy level.
+ * Level 0 = root categories (no parent)
+ * Level 1 = children of root
+ * Level 2 = grandchildren, etc.
+ */
+export function buildCategoryLevelMap(categories: WooCategory[]): Map<number, number> {
+  const levelMap = new Map<number, number>();
+  const childrenMap = new Map<number, WooCategory[]>();
+  const catMap = new Map<number, WooCategory>();
+
+  // Index all categories
+  for (const cat of categories) {
+    catMap.set(cat.id, cat);
+    const parentId = cat.parent || 0;
+    if (!childrenMap.has(parentId)) {
+      childrenMap.set(parentId, []);
+    }
+    childrenMap.get(parentId)!.push(cat);
+  }
+
+  // DFS to calculate level for each category
+  function calculateLevel(catId: number, level: number): void {
+    if (levelMap.has(catId)) return; // Already calculated
+    levelMap.set(catId, level);
+    const children = childrenMap.get(catId) || [];
+    for (const child of children) {
+      calculateLevel(child.id, level + 1);
+    }
+  }
+
+  // Start with root categories
+  const roots = childrenMap.get(0) || [];
+  for (const root of roots) {
+    calculateLevel(root.id, 0);
+  }
+
+  // Handle orphaned children
+  for (const cat of categories) {
+    if (!levelMap.has(cat.id)) {
+      calculateLevel(cat.id, 0);
+    }
+  }
+
+  return levelMap;
+}
+
 // ============================================================
 // CATEGORY TRANSFORMATION
 // ============================================================
@@ -718,7 +821,8 @@ export function sortCategoriesByHierarchy(
  * Giữ nguyên slug gốc từ WooCommerce để bảo toàn SEO URLs.
  */
 export function transformCategory(
-  wooCategory: WooCategory
+  wooCategory: WooCategory,
+  parentCategoryLevel: number = 0
 ): TransformResult<MedusaCategory> {
   const errors: TransformError[] = [];
 
@@ -737,6 +841,7 @@ export function transformCategory(
       originalId: String(wooCategory.id),
       originalSlug: wooCategory.slug,
       originalParentId: wooCategory.parent ? String(wooCategory.parent) : null,
+      parentCategoryLevel: String(parentCategoryLevel),
     },
   };
 

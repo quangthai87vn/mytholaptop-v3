@@ -12,10 +12,9 @@ import {
 import { cn } from "@/lib/utils";
 import {
   NAV_ITEMS,
-  isActivePath,
-  isParentActive,
+  isExactMatch,
+  isParentRoute,
   isChildActive,
-  getActiveChild,
   type NavItem,
 } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
@@ -33,7 +32,7 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
   const [expandedParents, setExpandedParents] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     NAV_ITEMS.forEach((item) => {
-      if (item.children && isParentActive(item, pathname)) {
+      if (item.children && isParentRoute(item, pathname)) {
         initial.add(item.title);
       }
     });
@@ -43,7 +42,7 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
   useEffect(() => {
     const parents = new Set<string>();
     NAV_ITEMS.forEach((item) => {
-      if (item.children && isParentActive(item, pathname)) {
+      if (item.children && isParentRoute(item, pathname)) {
         parents.add(item.title);
       }
     });
@@ -60,12 +59,16 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
   };
 
   const renderNavItem = (item: NavItem, depth: number = 0): React.ReactNode => {
-    const active = isActivePath(item.href || "", pathname);
     const hasChildren = !!item.children;
     const isExpanded = expandedParents.has(item.title);
 
     if (hasChildren) {
-      const parentHasActiveChild = isParentActive(item, pathname);
+      const parentIsOpen = isParentRoute(item, pathname);
+
+      // Parent styles: subtle active/open state (NOT solid red)
+      const parentStyles = parentIsOpen
+        ? "bg-red-50 text-red-600 border-l-2 border-red-600"
+        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
 
       const triggerBtn = (
         <button
@@ -73,21 +76,17 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
           onClick={() => toggleExpand(item.title)}
           className={cn(
             "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-            parentHasActiveChild && isExpanded
-              ? "text-red-600 bg-transparent"
-              : parentHasActiveChild
-              ? "text-red-600 bg-transparent"
-              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            parentStyles,
             collapsed && "justify-center px-2"
           )}
         >
-          <item.icon className="size-5 shrink-0" />
+          <item.icon className={cn("shrink-0", depth === 0 ? "size-5" : "size-4")} />
           {!collapsed && (
             <>
               <span className="flex-1 text-left">{item.title}</span>
               <ChevronDown
                 className={cn(
-                  "size-4 shrink-0 transition-transform",
+                  "size-4 shrink-0 transition-transform duration-200",
                   !isExpanded && "-rotate-90"
                 )}
               />
@@ -103,20 +102,22 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
               <TooltipTrigger asChild>{triggerBtn}</TooltipTrigger>
               <TooltipContent side="right" className="flex flex-col gap-1">
                 <span className="font-medium">{item.title}</span>
-                {item.children?.map((child) => (
-                  <Link
-                    key={child.href}
-                    href={child.href!}
-                    className={cn(
-                      "text-xs",
-                      isActivePath(child.href || "", pathname)
-                        ? "text-red-600 font-medium"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {child.title}
-                  </Link>
-                ))}
+                <div className="border-l-2 border-red-200 pl-2 space-y-1">
+                  {item.children?.map((child) => (
+                    <Link
+                      key={child.href}
+                      href={child.href!}
+                      className={cn(
+                        "block text-xs",
+                        isChildActive(child, pathname)
+                          ? "text-red-600 font-semibold"
+                          : "text-muted-foreground hover:text-red-500"
+                      )}
+                    >
+                      {child.title}
+                    </Link>
+                  ))}
+                </div>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -124,10 +125,10 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
       }
 
       return (
-        <div key={item.title}>
+        <div key={item.title} className="space-y-0.5">
           {triggerBtn}
           {isExpanded && (
-            <div className="mt-1 space-y-0.5">
+            <div className="mt-1 ml-2 pl-3 border-l-2 border-slate-200 space-y-0.5">
               {item.children!.map((child) => renderNavItem(child, depth + 1))}
             </div>
           )}
@@ -135,24 +136,26 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
       );
     }
 
-    const childActive = depth > 0 && isChildActive(item, pathname);
+    // Leaf item (no children)
+    const isActive = isExactMatch(item.href || "", pathname);
+    const isChildRoute = depth > 0;
+
+    const leafStyles = isActive
+      ? "bg-red-600 text-white font-semibold shadow-sm"
+      : isChildRoute
+      ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
 
     const navLink = (
       <Link
         href={item.href!}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-          active
-            ? "bg-red-600 text-white"
-            : childActive
-            ? "bg-red-600 text-white"
-            : depth > 0
-            ? "text-slate-600 hover:bg-slate-100"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+          leafStyles,
           collapsed && "justify-center px-2"
         )}
       >
-        <item.icon className="size-5 shrink-0" />
+        <item.icon className={cn("shrink-0", isChildRoute ? "size-4" : "size-5")} />
         {!collapsed && <span>{item.title}</span>}
       </Link>
     );

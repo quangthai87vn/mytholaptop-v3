@@ -38,9 +38,14 @@ Thumbs.db
 # History
 .history/
 
-# Uploaded media (migrated from WordPress)
+# Uploaded media (migrated from WordPress - NEVER commit these)
 apps/admin-ui/public/wp-content/uploads/
+apps/admin-ui/public/wp-content/uploads
 apps/admin-ui/public/uploads/
+apps/admin-ui/public/uploads
+# Wildcard pattern for any wp-content subdirectories with "uploads"
+apps/admin-ui/public/wp-content/*/
+apps/admin-ui/public/wp-content/*
 
 # Duplicate/unused folders (do not commit)
 apps/admin-ui/apps/

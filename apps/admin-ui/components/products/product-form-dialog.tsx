@@ -30,6 +30,7 @@ import {
   useCategories,
 } from "@/hooks/use-medusa";
 import type { MedusaProduct, CreateProductInput } from "@/services/medusa-types";
+import { resolveImageUrlForDisplay } from "@/lib/products/product-filters";
 import { toast } from "sonner";
 
 interface ProductFormDialogProps {
@@ -490,15 +491,16 @@ export function ProductFormDialog({
               </p>
             </div>
 
-            {form.thumbnail && (
+              {form.thumbnail && (
               <div className="space-y-2">
                 <Label>Xem trước</Label>
                 <div className="relative w-full max-w-xs h-48 rounded-md border overflow-hidden bg-muted">
                   <Image
-                    src={form.thumbnail}
+                    src={resolveImageUrlForDisplay(form.thumbnail)}
                     alt="Preview"
                     fill
                     className="object-contain"
+                    unoptimized
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = "none";
                     }}

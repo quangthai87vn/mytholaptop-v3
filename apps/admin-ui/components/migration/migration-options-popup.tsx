@@ -4,11 +4,23 @@ import { useState } from "react";
 import {
   Settings,
   Save,
+  ImageIcon,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +31,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { MigrationDataType, ConflictStrategy } from "@/types";
-import type { MediaMigrationOptions } from "@/types/media-mapping";
+import type { MediaMigrationOptions, ImageUploadConfig } from "@/types/media-mapping";
+import { DEFAULT_IMAGE_UPLOAD_CONFIG } from "@/types/media-mapping";
 
 const DATA_TYPE_OPTIONS: Array<{ id: MigrationDataType; label: string; description: string }> = [
   { id: "categories", label: "Danh mục sản phẩm", description: "Chuyển toàn bộ danh mục" },
@@ -33,12 +46,14 @@ interface MigrationOptionsPopupProps {
   skipOnError: boolean;
   preserveImages: boolean;
   mediaOptions: MediaMigrationOptions;
+  imageConfig: ImageUploadConfig;
   onTypeToggle: (type: MigrationDataType) => void;
   onConflictChange: (strategy: ConflictStrategy) => void;
   onBatchSizeChange: (v: number) => void;
   onSkipOnErrorChange: (v: boolean) => void;
   onPreserveImagesChange: (v: boolean) => void;
   onMediaOptionsChange: (opts: MediaMigrationOptions) => void;
+  onImageConfigChange: (cfg: ImageUploadConfig) => void;
   onClearAll?: () => void;
   isRunning?: boolean;
 }
@@ -50,17 +65,52 @@ export function MigrationOptionsPopup({
   skipOnError,
   preserveImages,
   mediaOptions,
+  imageConfig,
   onTypeToggle,
   onConflictChange,
   onBatchSizeChange,
   onSkipOnErrorChange,
   onPreserveImagesChange,
   onMediaOptionsChange,
+  onImageConfigChange,
   isRunning,
 }: MigrationOptionsPopupProps) {
   const [isOpen, setIsOpen] = useState(false);
+  // Local state for image config form (only applied on Save)
+  const [localImageConfig, setLocalImageConfig] = useState<ImageUploadConfig>(imageConfig);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [showAbsoluteWarning, setShowAbsoluteWarning] = useState(false);
+
+  // Sync local state when dialog opens
+  const handleOpenChange = (open: boolean) => {
+    if (open) {
+      setLocalImageConfig(imageConfig);
+      setConfigError(null);
+      setShowAbsoluteWarning(imageConfig.imageSaveMode === "absolute_url");
+    }
+    setIsOpen(open);
+  };
 
   const handleSave = () => {
+    // Validate image config
+    const cfg = localImageConfig;
+
+    if (!cfg.uploadRootDir || cfg.uploadRootDir.trim() === "") {
+      setConfigError("Thư mục lưu ảnh không được để trống.");
+      return;
+    }
+
+    if (!cfg.uploadPublicPath || !cfg.uploadPublicPath.startsWith("/")) {
+      setConfigError("Đường dẫn public phải bắt đầu bằng dấu / (ví dụ: /uploads/medusa/products).");
+      return;
+    }
+
+    if (cfg.imageSaveMode === "absolute_url") {
+      setShowAbsoluteWarning(true);
+    }
+
+    setConfigError(null);
+    onImageConfigChange(cfg);
     setIsOpen(false);
   };
 
@@ -88,7 +138,7 @@ export function MigrationOptionsPopup({
       </div>
 
       {/* Popup Dialog */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader className="space-y-3">
             <div className="flex items-center gap-2">
@@ -215,12 +265,15 @@ export function MigrationOptionsPopup({
                     <p className="text-xs font-medium text-muted-foreground mb-2">Tuỳ chọn tải ảnh:</p>
                     <div className="flex items-center gap-2">
                       <Checkbox
-                        id="inline-media"
-                        checked={mediaOptions.inlineProductMedia ?? true}
-                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, inlineProductMedia: !!v })}
+                        id="only-wp-domain"
+                        checked={mediaOptions.onlyFromWordpressDomain}
+                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, onlyFromWordpressDomain: !!v })}
                       />
-                      <label htmlFor="inline-media" className="text-xs cursor-pointer font-medium">
-                        Tải ảnh đồng bộ (từng sản phẩm + ảnh xong rồi mới qua sản phẩm kế tiếp)
+                      <label htmlFor="only-wp-domain" className="text-xs cursor-pointer font-medium">
+                        Chỉ tải từ WordPress
+                        <span className="ml-1 text-muted-foreground font-normal">
+                          (bỏ qua ảnh từ CDN/hotlink khác)
+                        </span>
                       </label>
                     </div>
                     <div className="flex items-center gap-2">
@@ -247,10 +300,226 @@ export function MigrationOptionsPopup({
                       />
                       <label htmlFor="download-category" className="text-xs cursor-pointer">Tải ảnh danh mục</label>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="download-description"
+                        checked={mediaOptions.downloadDescriptionImages}
+                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, downloadDescriptionImages: !!v })}
+                      />
+                      <label htmlFor="download-description" className="text-xs cursor-pointer">Tải ảnh trong mô tả</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="download-short-desc"
+                        checked={mediaOptions.downloadShortDescImages}
+                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, downloadShortDescImages: !!v })}
+                      />
+                      <label htmlFor="download-short-desc" className="text-xs cursor-pointer">Tải ảnh trong mô tả ngắn</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="rewrite-html"
+                        checked={mediaOptions.rewriteHtmlDescriptions}
+                        onCheckedChange={(v) => onMediaOptionsChange({ ...mediaOptions, rewriteHtmlDescriptions: !!v })}
+                      />
+                      <label htmlFor="rewrite-html" className="text-xs cursor-pointer">Viết lại HTML mô tả</label>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Cấu hình hình ảnh — chỉ hiện khi "Tải ảnh về Medusa" được chọn */}
+            {!preserveImages && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="size-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Cấu hình hình ảnh</h3>
+                </div>
+
+                {/* Enable/Disable */}
+                <div className="flex items-center justify-between rounded-lg border border-primary/50 bg-primary/5 p-3">
+                  <div>
+                    <p className="text-sm font-medium">Bật migrate ảnh</p>
+                    <p className="text-xs text-muted-foreground">Tải ảnh từ WooCommerce về server Medusa</p>
+                  </div>
+                  <Checkbox
+                    checked={localImageConfig.enabled}
+                    onCheckedChange={(v) =>
+                      setLocalImageConfig((prev) => ({ ...prev, enabled: !!v }))
+                    }
+                  />
+                </div>
+
+                {localImageConfig.enabled && (
+                  <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+
+                    {/* uploadRootDir */}
+                    <div className="space-y-1">
+                      <Label htmlFor="upload-root-dir" className="text-xs font-medium">
+                        Thư mục lưu ảnh trên server
+                      </Label>
+                      <Input
+                        id="upload-root-dir"
+                        value={localImageConfig.uploadRootDir}
+                        onChange={(e) =>
+                          setLocalImageConfig((prev) => ({ ...prev, uploadRootDir: e.target.value }))
+                        }
+                        placeholder="public/wp-content/uploads"
+                        className="h-8 text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Thư mục vật lý trên server để lưu file ảnh. Mặc định: public/wp-content/uploads
+                      </p>
+                    </div>
+
+                    {/* uploadPublicPath */}
+                    <div className="space-y-1">
+                      <Label htmlFor="upload-public-path" className="text-xs font-medium">
+                        Đường dẫn public tương đối
+                      </Label>
+                      <Input
+                        id="upload-public-path"
+                        value={localImageConfig.uploadPublicPath}
+                        onChange={(e) =>
+                          setLocalImageConfig((prev) => ({ ...prev, uploadPublicPath: e.target.value }))
+                        }
+                        placeholder="/wp-content/uploads"
+                        className="h-8 text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Đường dẫn lưu vào database. Phải bắt đầu bằng /. Mặc định: /wp-content/uploads
+                      </p>
+                    </div>
+
+                    {/* imageFolderPattern */}
+                    <div className="space-y-1">
+                      <Label htmlFor="folder-pattern" className="text-xs font-medium">
+                        Cấu trúc thư mục ảnh
+                      </Label>
+                      <Input
+                        id="folder-pattern"
+                        value={localImageConfig.imageFolderPattern}
+                        onChange={(e) =>
+                          setLocalImageConfig((prev) => ({ ...prev, imageFolderPattern: e.target.value }))
+                        }
+                        placeholder="{year}/{month}"
+                        className="h-8 text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Hỗ trợ: {"{"}year{"}"}, {"{"}month{"}"}, {"{"}day{"}"}. Ví dụ: {"{"}year{"}"}/{"{"}month{"}"} → 2026/05
+                      </p>
+                    </div>
+
+                    {/* imageFileNameMode */}
+                    <div className="space-y-1">
+                      <Label htmlFor="filename-mode" className="text-xs font-medium">
+                        Quy tắc đặt tên file
+                      </Label>
+                      <Select
+                        value={localImageConfig.imageFileNameMode}
+                        onValueChange={(v) =>
+                          setLocalImageConfig((prev) => ({
+                            ...prev,
+                            imageFileNameMode: v as ImageUploadConfig["imageFileNameMode"],
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="filename-mode" className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="source-hash">source-hash (mã hash từ URL nguồn) — Khuyến nghị</SelectItem>
+                          <SelectItem value="keep-original-name">keep-original-name (giữ nguyên tên file)</SelectItem>
+                          <SelectItem value="product-slug">product-slug (dùng slug sản phẩm)</SelectItem>
+                          <SelectItem value="product-sku">product-sku (dùng SKU sản phẩm)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* imageConflictStrategy */}
+                    <div className="space-y-1">
+                      <Label htmlFor="conflict-strategy" className="text-xs font-medium">
+                        Khi ảnh đã tồn tại
+                      </Label>
+                      <Select
+                        value={localImageConfig.imageConflictStrategy}
+                        onValueChange={(v) =>
+                          setLocalImageConfig((prev) => ({
+                            ...prev,
+                            imageConflictStrategy: v as ImageUploadConfig["imageConflictStrategy"],
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="conflict-strategy" className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="skip">skip — Bỏ qua nếu đã tồn tại (Khuyến nghị)</SelectItem>
+                          <SelectItem value="overwrite">overwrite — Ghi đè file cũ</SelectItem>
+                          <SelectItem value="rename">rename — Đổi tên file mới</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* imageSaveMode */}
+                    <div className="space-y-1">
+                      <Label htmlFor="save-mode" className="text-xs font-medium">
+                        Lưu đường dẫn vào database dạng
+                      </Label>
+                      <Select
+                        value={localImageConfig.imageSaveMode}
+                        onValueChange={(v) => {
+                          const mode = v as ImageUploadConfig["imageSaveMode"];
+                          setLocalImageConfig((prev) => ({ ...prev, imageSaveMode: mode }));
+                          setShowAbsoluteWarning(mode === "absolute_url");
+                        }}
+                      >
+                        <SelectTrigger id="save-mode" className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="relative_path">relative_path — /uploads/medusa/products/2026/05/abc.webp</SelectItem>
+                          <SelectItem value="absolute_url">absolute_url — https://domain.com/uploads/...</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {localImageConfig.imageSaveMode === "relative_path" ? (
+                        <div className="flex items-start gap-1 rounded bg-green-50 border border-green-200 p-2">
+                          <Info className="size-3 text-green-600 mt-0.5 shrink-0" />
+                          <p className="text-[10px] text-green-700">
+                            <strong>Khuyến nghị.</strong> Đường dẫn tương đối giúp chuyển server hoặc đổi domain dễ dàng, không cần sửa URL trong database.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-1 rounded bg-orange-50 border border-orange-200 p-2">
+                          <AlertTriangle className="size-3 text-orange-600 mt-0.5 shrink-0" />
+                          <p className="text-[10px] text-orange-700">
+                            <strong>Không khuyến nghị.</strong> Lưu URL tuyệt đối sẽ khó chuyển server hoặc đổi domain vì phải cập nhật toàn bộ URL trong database.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Preview path */}
+                    <div className="rounded border border-dashed border-muted-foreground/30 bg-muted/20 p-2">
+                      <p className="text-[10px] text-muted-foreground font-medium mb-1">Ví dụ đường dẫn lưu database:</p>
+                      <code className="text-[10px] text-primary break-all">
+                        {localImageConfig.uploadPublicPath || "/wp-content/uploads"}/{localImageConfig.imageFolderPattern || "{year}/{month}"}/abc.webp
+                      </code>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Config error */}
+            {configError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+                <AlertTriangle className="size-4 text-red-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-red-700">{configError}</p>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">

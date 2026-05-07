@@ -10,6 +10,7 @@
 import type {
   WooProduct,
   WooCategory,
+  WooTag,
   ConnectionState,
   PreviewState,
   PreviewValidation,
@@ -183,6 +184,48 @@ export async function fetchCategories(
   }
 
   return { success: true, data: allCategories };
+}
+
+/**
+ * Fetch all product tags from WooCommerce with pagination.
+ * https://woocommerce.github.io/woocommerce-rest-api-docs/#product-tags
+ */
+export async function fetchTags(
+  config: WooCommerceConfig,
+  onPage?: (tags: WooTag[], totalSoFar: number) => void
+): Promise<ApiResponse<WooTag[]>> {
+  const allTags: WooTag[] = [];
+  let page = 1;
+  const perPage = 100;
+
+  while (true) {
+    const result = await wooCommerceRequest<WooTag[]>(
+      `/products/tags?per_page=${perPage}&page=${page}&hide_empty=true`,
+      config
+    );
+
+    if (!result.success || !result.data) {
+      return { success: false, error: result.error };
+    }
+
+    allTags.push(...result.data);
+
+    if (onPage && result.data.length > 0) {
+      onPage(result.data, allTags.length);
+    }
+
+    if (result.data.length < perPage) {
+      break;
+    }
+
+    page++;
+
+    if (page > 50) {
+      break;
+    }
+  }
+
+  return { success: true, data: allTags };
 }
 
 /**

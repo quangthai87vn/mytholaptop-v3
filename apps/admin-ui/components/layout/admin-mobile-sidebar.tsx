@@ -7,8 +7,8 @@ import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
   NAV_ITEMS,
-  isActivePath,
-  isParentActive,
+  isExactMatch,
+  isParentRoute,
   isChildActive,
   type NavItem,
 } from "@/lib/navigation";
@@ -24,7 +24,7 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
   const [expandedParents, setExpandedParents] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     NAV_ITEMS.forEach((item) => {
-      if (item.children && isParentActive(item, pathname)) {
+      if (item.children && isParentRoute(item, pathname)) {
         initial.add(item.title);
       }
     });
@@ -40,37 +40,29 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
     });
   };
 
-  const handleNavClick = (item: NavItem) => {
-    if (item.children) {
-      toggleExpand(item.title);
-    } else {
-      onClose();
-    }
-  };
-
-  const renderNavItem = (item: NavItem, depth: number = 0) => {
-    const active = isActivePath(item.href || "", pathname);
+  const renderNavItem = (item: NavItem, depth: number = 0): React.ReactNode => {
     const hasChildren = !!item.children;
     const isExpanded = expandedParents.has(item.title);
 
     if (hasChildren) {
-      const parentHasActiveChild = isParentActive(item, pathname);
+      const parentIsOpen = isParentRoute(item, pathname);
+
+      // Parent styles: subtle active/open state (NOT solid red)
+      const parentStyles = parentIsOpen
+        ? "bg-red-50 text-red-600 border-l-2 border-red-600"
+        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
 
       return (
-        <div key={item.title}>
+        <div key={item.title} className="space-y-0.5">
           <button
             onClick={() => toggleExpand(item.title)}
             className={cn(
               "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-              parentHasActiveChild && isExpanded
-                ? "text-red-600 bg-transparent"
-                : parentHasActiveChild
-                ? "text-red-600 bg-transparent"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              parentStyles,
               depth > 0 && "pl-8"
             )}
           >
-            <item.icon className="size-5 shrink-0" />
+            <item.icon className={cn("shrink-0", depth === 0 ? "size-5" : "size-4")} />
             <span className="flex-1 text-left">{item.title}</span>
             {isExpanded ? (
               <ChevronDown className="size-4 shrink-0" />
@@ -79,7 +71,7 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
             )}
           </button>
           {isExpanded && (
-            <div className="mt-1">
+            <div className="mt-1 ml-2 pl-3 border-l-2 border-slate-200">
               {item.children!.map((child) => renderNavItem(child, depth + 1))}
             </div>
           )}
@@ -87,26 +79,28 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
       );
     }
 
-    const childActive = depth > 0 && isChildActive(item, pathname);
+    // Leaf item (no children)
+    const isActive = isExactMatch(item.href || "", pathname);
+    const isChildRoute = depth > 0;
+
+    const leafStyles = isActive
+      ? "bg-red-600 text-white font-semibold shadow-sm"
+      : isChildRoute
+      ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
 
     return (
       <Link
         key={item.href}
         href={item.href!}
-        onClick={() => onClose()}
+        onClick={onClose}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-          depth > 0 && "pl-8",
-          active
-            ? "bg-red-600 text-white"
-            : childActive
-            ? "bg-red-600 text-white"
-            : depth > 0
-            ? "text-slate-600 hover:bg-slate-100"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+          leafStyles,
+          depth > 0 && "pl-8"
         )}
       >
-        <item.icon className="size-5 shrink-0" />
+        <item.icon className={cn("shrink-0", isChildRoute ? "size-4" : "size-5")} />
         <span>{item.title}</span>
       </Link>
     );

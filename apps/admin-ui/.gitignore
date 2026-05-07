@@ -1,4 +1,8 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Uploaded media (migrated from WordPress - NEVER commit these)
+public/wp-content/uploads/
+public/wp-content/uploads
+public/uploads/
+public/uploads
 
 # dependencies
 /node_modules
