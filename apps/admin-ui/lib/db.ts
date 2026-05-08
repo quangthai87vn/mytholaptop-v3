@@ -5,7 +5,18 @@
 
 import { Pool, PoolClient } from "pg";
 
-const DATABASE_URL = process.env.DATABASE_URL || "postgres://postgres:postgrespassword%261P%40ssw0rd%26Aimabiettaolaai@localhost:5433/mtl_medusa";
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  throw new Error(
+    "[ERROR] DATABASE_URL chua duoc cau hinh.\n" +
+    "Vui long tao file .env trong thu muc admin-ui voi:\n" +
+    "  DATABASE_URL=postgres://user:password@host:5433/mtl_medusa\n" +
+    "Hoac dat bien moi truong truoc khi chay:\n" +
+    "  Windows (ps):  $env:DATABASE_URL='postgres://...'\n" +
+    "  macOS/Linux:   export DATABASE_URL=postgres://..."
+  );
+}
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
