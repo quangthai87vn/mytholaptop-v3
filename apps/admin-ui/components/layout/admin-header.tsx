@@ -267,7 +267,7 @@ const NOTIF_COLORS: Record<Notification["type"], string> = {
   order: "text-blue-600 bg-blue-50",
   stock: "text-amber-600 bg-amber-50",
   sync: "text-purple-600 bg-purple-50",
-  zns: "text-red-600 bg-red-50",
+  zns: "text-primary bg-primary/10",
   care: "text-green-600 bg-green-50",
 };
 
@@ -293,11 +293,10 @@ function buildBreadcrumbs(pathname: string) {
 // ─────────────────────────────────────────────
 
 interface AdminHeaderProps {
-  sidebarCollapsed: boolean;
   onMobileMenuOpen: () => void;
 }
 
-export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderProps) {
+export function AdminHeader({ onMobileMenuOpen }: AdminHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -320,13 +319,12 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
     <>
       <header
         className={cn(
-          "fixed top-0 right-0 z-30 flex h-[68px] items-center border-b border-gray-200 bg-white/95 backdrop-blur-sm",
-          "transition-all duration-300 ease-in-out",
-          sidebarCollapsed ? "lg:left-[64px]" : "lg:left-[256px]"
+          "sticky top-0 z-30 flex h-[68px] items-center border-b border-gray-200 bg-white/95 backdrop-blur-sm",
+          "transition-all duration-300 ease-in-out"
         )}
       >
         {/* ── LEFT: Mobile menu + Breadcrumb + Page title ── */}
-        <div className="flex items-center gap-3 px-4 min-w-0 flex-shrink-0 lg:pl-6 w-auto">
+        <div className="flex items-center gap-3 px-4 lg:pl-6 min-w-0">
           {/* Mobile hamburger */}
           <Button
             variant="ghost"
@@ -381,15 +379,15 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
         </div>
 
         {/* ── CENTER: Global search ── */}
-        <div className="hidden md:flex flex-1 justify-center px-4 max-w-xl mx-auto">
+        <div className="hidden md:flex flex-1 justify-center px-4 min-w-0">
           <button
             onClick={() => setSearchOpen(true)}
             className={cn(
-              "flex items-center gap-3 w-full h-10 rounded-lg border border-gray-200 bg-gray-50/60",
+              "flex items-center gap-3 h-9 rounded-lg border border-gray-200 bg-gray-50/60",
               "px-3.5 text-sm text-gray-400",
-              "hover:border-red-300 hover:bg-white transition-all duration-150 cursor-text",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30",
-              "max-w-[440px]"
+              "hover:border-primary/30 hover:bg-white transition-all duration-150 cursor-text",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+              "w-full max-w-[440px]"
             )}
           >
             <Search className="size-4 shrink-0 text-gray-400" />
@@ -404,7 +402,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
         </div>
 
         {/* ── RIGHT: Actions ── */}
-        <div className="flex items-center gap-1 pr-4 ml-auto">
+        <div className="flex items-center gap-1 pr-4 min-w-0">
           {/* Mobile search icon */}
           <Button
             variant="ghost"
@@ -421,7 +419,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
             <DropdownMenuTrigger asChild>
               <Button
                 size="sm"
-                className="h-9 gap-1.5 font-medium text-[13px] px-3 bg-red-600 hover:bg-red-700 text-white border-0"
+                className="h-9 gap-1.5 font-medium text-[13px] px-3 bg-primary hover:bg-primary/90 text-primary-foreground border-0"
               >
                 <Plus className="size-4 shrink-0" />
                 <span className="hidden xl:inline">Tạo nhanh</span>
@@ -462,7 +460,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
               >
                 <Bell className="size-[18px]" />
                 {unreadCount > 0 && (
-                  <Badge className="absolute -right-0.5 -top-0.5 size-4 min-w-4 min-h-4 justify-center p-0 text-[9px] font-bold bg-red-600 text-white">
+                  <Badge className="absolute -right-0.5 -top-0.5 size-4 min-w-4 min-h-4 justify-center p-0 text-[9px] font-bold bg-primary text-primary-foreground">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </Badge>
                 )}
@@ -510,7 +508,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
                           className={cn(
                             "flex items-start gap-3 px-4 py-3",
                             "hover:bg-gray-50 transition-colors",
-                            !notif.read && "bg-red-50/40"
+                            !notif.read && "bg-primary/5"
                           )}
                           onClick={() => markRead(notif.id)}
                         >
@@ -533,7 +531,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
                                 {notif.title}
                               </p>
                               {!notif.read && (
-                                <span className="size-1.5 rounded-full bg-red-500 shrink-0 mt-1" />
+                                <span className="size-1.5 rounded-full bg-primary shrink-0 mt-1" />
                               )}
                             </div>
                             <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1 leading-snug">
@@ -569,7 +567,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
               >
                 <Avatar className="size-8 shrink-0 ring-2 ring-white shadow-sm">
                   <AvatarImage src={CURRENT_USER.avatarUrl} alt={CURRENT_USER.name} />
-                  <AvatarFallback className="bg-red-600 text-white text-[11px] font-bold">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-[11px] font-bold">
                     {CURRENT_USER.initials}
                   </AvatarFallback>
                 </Avatar>
@@ -590,7 +588,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
                 <div className="flex items-center gap-3 px-4 py-3.5">
                   <Avatar className="size-10 shrink-0 ring-2 ring-white shadow-sm">
                     <AvatarImage src={CURRENT_USER.avatarUrl} alt={CURRENT_USER.name} />
-                    <AvatarFallback className="bg-red-600 text-white text-xs font-bold">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
                       {CURRENT_USER.initials}
                     </AvatarFallback>
                   </Avatar>
@@ -599,7 +597,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
                       {CURRENT_USER.name}
                     </p>
                     <p className="text-[11px] text-gray-400 truncate">{CURRENT_USER.email}</p>
-                    <span className="inline-flex items-center mt-0.5 text-[10px] text-red-600 font-semibold">
+                    <span className="inline-flex items-center mt-0.5 text-[10px] text-primary font-semibold">
                       {CURRENT_USER.role}
                     </span>
                   </div>
@@ -635,7 +633,7 @@ export function AdminHeader({ sidebarCollapsed, onMobileMenuOpen }: AdminHeaderP
               <DropdownMenuSeparator />
 
               <DropdownMenuItem
-                className="gap-2.5 cursor-pointer text-red-600 focus:text-red-700 text-[13px] py-2.5"
+                className="gap-2.5 cursor-pointer text-destructive focus:text-destructive/80 text-[13px] py-2.5"
                 onClick={() => router.push("/login")}
               >
                 <LogOut className="size-4" />

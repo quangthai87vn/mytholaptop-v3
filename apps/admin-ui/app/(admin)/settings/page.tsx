@@ -6,7 +6,6 @@ import {
   Globe,
   Key,
   Database,
-  Palette,
   Save,
   Eye,
   EyeOff,
@@ -19,11 +18,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { defaultSettings } from "@/lib/mock-data";
 import { loadSettings, saveSettings } from "@/lib/settings-storage";
+import { saveCompanySettings } from "@/lib/company-settings";
 import type { Settings } from "@/types";
 
 export default function SettingsPage() {
@@ -51,7 +50,16 @@ export default function SettingsPage() {
     setSaving(true);
     setSaveError(null);
     try {
+      // Save full settings to server (existing behavior)
       await saveSettings(settings);
+      // Also persist company branding to localStorage for instant sidebar update
+      saveCompanySettings({
+        name: settings.company.name,
+        logoUrl: settings.company.logoUrl,
+        website: settings.company.website,
+        phone: settings.company.phone,
+        address: settings.company.address,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {
@@ -95,7 +103,7 @@ export default function SettingsPage() {
     }
   }, [settings.medusa]);
 
-  const updateSettings = useCallback((path: string, value: string | boolean) => {
+  const updateServerSettings = useCallback((path: string, value: string | boolean) => {
     setSettings((prev) => {
       const next = { ...prev };
       const keys = path.split(".");
@@ -172,10 +180,6 @@ export default function SettingsPage() {
             <Database className="mr-2 size-4" />
             Medusa
           </TabsTrigger>
-          <TabsTrigger value="ui">
-            <Palette className="mr-2 size-4" />
-            Giao diện
-          </TabsTrigger>
         </TabsList>
 
         {/* Company info */}
@@ -194,7 +198,7 @@ export default function SettingsPage() {
                   <Input
                     id="company-name"
                     value={settings.company.name}
-                    onChange={(e) => updateSettings("company.name", e.target.value)}
+                    onChange={(e) => updateServerSettings("company.name", e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
@@ -203,7 +207,7 @@ export default function SettingsPage() {
                     id="company-website"
                     placeholder="https://mytholaptop.vn"
                     value={settings.company.website}
-                    onChange={(e) => updateSettings("company.website", e.target.value)}
+                    onChange={(e) => updateServerSettings("company.website", e.target.value)}
                   />
                 </div>
               </div>
@@ -214,7 +218,7 @@ export default function SettingsPage() {
                     id="company-phone"
                     placeholder="0273.123.456"
                     value={settings.company.phone}
-                    onChange={(e) => updateSettings("company.phone", e.target.value)}
+                    onChange={(e) => updateServerSettings("company.phone", e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
@@ -223,7 +227,7 @@ export default function SettingsPage() {
                     id="company-logo"
                     placeholder="https://example.com/logo.png"
                     value={settings.company.logoUrl}
-                    onChange={(e) => updateSettings("company.logoUrl", e.target.value)}
+                    onChange={(e) => updateServerSettings("company.logoUrl", e.target.value)}
                   />
                 </div>
               </div>
@@ -233,7 +237,7 @@ export default function SettingsPage() {
                   id="company-address"
                   placeholder="123 Nguyễn Trãi, P.1, TP. Mỹ Tho, Tiền Giang"
                   value={settings.company.address}
-                  onChange={(e) => updateSettings("company.address", e.target.value)}
+                  onChange={(e) => updateServerSettings("company.address", e.target.value)}
                 />
               </div>
             </CardContent>
@@ -258,7 +262,7 @@ export default function SettingsPage() {
                   placeholder="https://mytholaptop.vn/wp-json"
                   value={settings.wooCommerce.wordpressUrl}
                   onChange={(e) =>
-                    updateSettings("wooCommerce.wordpressUrl", e.target.value)
+                    updateServerSettings("wooCommerce.wordpressUrl", e.target.value)
                   }
                 />
               </div>
@@ -272,7 +276,7 @@ export default function SettingsPage() {
                     placeholder="ck_xxxxxxxxxxxxxxxx"
                     value={settings.wooCommerce.consumerKey}
                     onChange={(e) =>
-                      updateSettings("wooCommerce.consumerKey", e.target.value)
+                      updateServerSettings("wooCommerce.consumerKey", e.target.value)
                     }
                     className="pr-10"
                   />
@@ -300,7 +304,7 @@ export default function SettingsPage() {
                     placeholder="cs_xxxxxxxxxxxxxxxx"
                     value={settings.wooCommerce.consumerSecret}
                     onChange={(e) =>
-                      updateSettings("wooCommerce.consumerSecret", e.target.value)
+                      updateServerSettings("wooCommerce.consumerSecret", e.target.value)
                     }
                     className="pr-10"
                   />
@@ -345,7 +349,7 @@ export default function SettingsPage() {
                       placeholder="admin@mytholaptop.vn"
                       value={settings.medusa.adminEmail}
                       onChange={(e) =>
-                        updateSettings("medusa.adminEmail", e.target.value)
+                        updateServerSettings("medusa.adminEmail", e.target.value)
                       }
                     />
                   </div>
@@ -358,7 +362,7 @@ export default function SettingsPage() {
                         placeholder="Nhập password"
                         value={settings.medusa.adminPassword}
                         onChange={(e) =>
-                          updateSettings("medusa.adminPassword", e.target.value)
+                          updateServerSettings("medusa.adminPassword", e.target.value)
                         }
                         className="pr-10"
                       />
@@ -385,7 +389,7 @@ export default function SettingsPage() {
                     placeholder="http://localhost:9000"
                     value={settings.medusa.backendUrl}
                     onChange={(e) =>
-                      updateSettings("medusa.backendUrl", e.target.value)
+                      updateServerSettings("medusa.backendUrl", e.target.value)
                     }
                   />
                 </div>
@@ -402,7 +406,7 @@ export default function SettingsPage() {
                         placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                         value={settings.medusa.adminApiKey}
                         onChange={(e) =>
-                          updateSettings("medusa.adminApiKey", e.target.value)
+                          updateServerSettings("medusa.adminApiKey", e.target.value)
                         }
                         className="pr-10 font-mono text-sm"
                       />
@@ -442,68 +446,6 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* UI settings */}
-        <TabsContent value="ui">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tuỳ chọn giao diện</CardTitle>
-              <CardDescription>
-                Tùy chỉnh giao diện admin dashboard
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Màu chủ đạo</Label>
-                <div className="flex items-center gap-3">
-                  <div
-                    className="size-10 rounded-lg border-2 border-primary"
-                    style={{ backgroundColor: settings.ui.primaryColor }}
-                  />
-                  <Input
-                    value={settings.ui.primaryColor}
-                    onChange={(e) =>
-                      updateSettings("ui.primaryColor", e.target.value)
-                    }
-                    className="w-40 font-mono"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    #E60012 — Đỏ Mỹ Tho Laptop
-                  </span>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Chế độ Dark Mode</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Bật chế độ tối cho giao diện admin
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.ui.darkMode}
-                  onCheckedChange={(checked) =>
-                    updateSettings("ui.darkMode", checked)
-                  }
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Sidebar thu gọn mặc định</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Sidebar thu gọn khi mới mở dashboard
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.ui.sidebarCollapsed}
-                  onCheckedChange={(checked) =>
-                    updateSettings("ui.sidebarCollapsed", checked)
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );

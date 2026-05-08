@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Laptop,
   Menu,
+  ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -19,7 +20,9 @@ import {
 } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { loadCompanySettings, DEFAULT_COMPANY } from "@/lib/company-settings";
+import type { CompanySettings } from "@/lib/company-settings";
 
 interface AdminSidebarProps {
   collapsed: boolean;
@@ -38,6 +41,21 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
     });
     return initial;
   });
+
+  // ─── Company branding ───────────────────────────────────────────────
+  const [company, setCompany] = useState<CompanySettings>(DEFAULT_COMPANY);
+  const [logoError, setLogoError] = useState(false);
+
+  const reloadCompany = useCallback(() => {
+    setCompany(loadCompanySettings());
+    setLogoError(false);
+  }, []);
+
+  useEffect(() => {
+    reloadCompany();
+    window.addEventListener("company-settings-changed", reloadCompany);
+    return () => window.removeEventListener("company-settings-changed", reloadCompany);
+  }, [reloadCompany]);
 
   useEffect(() => {
     const parents = new Set<string>();
@@ -65,10 +83,10 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
     if (hasChildren) {
       const parentIsOpen = isParentRoute(item, pathname);
 
-      // Parent styles: subtle active/open state (NOT solid red)
+      // Parent styles: open/active = red, default = dark grey
       const parentStyles = parentIsOpen
-        ? "bg-red-50 text-red-600 border-l-2 border-red-600"
-        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
+        ? "bg-red-50 text-red-600 border-l-2 border-red-600 font-semibold"
+        : "text-slate-700 hover:bg-red-50 hover:text-red-600";
 
       const triggerBtn = (
         <button
@@ -102,7 +120,7 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
               <TooltipTrigger asChild>{triggerBtn}</TooltipTrigger>
               <TooltipContent side="right" className="flex flex-col gap-1">
                 <span className="font-medium">{item.title}</span>
-                <div className="border-l-2 border-red-200 pl-2 space-y-1">
+                <div className="border-l-2 border-primary/20 pl-2 space-y-1">
                   {item.children?.map((child) => (
                     <Link
                       key={child.href}
@@ -111,7 +129,7 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
                         "block text-xs",
                         isChildActive(child, pathname)
                           ? "text-red-600 font-semibold"
-                          : "text-muted-foreground hover:text-red-500"
+                          : "text-slate-700 hover:text-red-600"
                       )}
                     >
                       {child.title}
@@ -143,8 +161,8 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
     const leafStyles = isActive
       ? "bg-red-600 text-white font-semibold shadow-sm"
       : isChildRoute
-      ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
+      ? "text-slate-600 hover:bg-red-50 hover:text-red-600"
+      : "text-slate-700 hover:bg-red-50 hover:text-red-600";
 
     const navLink = (
       <Link
@@ -175,20 +193,38 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 flex h-screen flex-col border-r bg-card transition-all duration-300 hidden md:flex",
+        "sticky top-0 z-40 flex h-screen flex-col border-r bg-white text-black transition-all duration-300 hidden md:flex",
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Logo */}
+      {/* Logo / Brand */}
       <div className="flex h-16 items-center justify-between border-b px-4">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary">
-            <Laptop className="size-5 text-white" />
+        <Link href="/dashboard" className="flex items-center gap-3 min-w-0">
+          {/* Logo image */}
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-primary/10">
+            {company.logoUrl && !logoError ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                className="h-full w-full object-contain"
+                src={company.logoUrl}
+                alt={company.name}
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <Laptop className="size-5 text-primary" />
+              </div>
+            )}
           </div>
+          {/* Company name */}
           {!collapsed && (
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-primary">Mỹ Tho</span>
-              <span className="text-xs font-medium text-foreground">Laptop</span>
+            <div className="min-w-0">
+              <div
+                className="truncate whitespace-nowrap text-sm font-bold text-primary leading-tight"
+                title={company.name}
+              >
+                {company.name}
+              </div>
             </div>
           )}
         </Link>

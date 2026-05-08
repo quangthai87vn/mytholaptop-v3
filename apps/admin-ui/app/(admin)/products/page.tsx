@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Image from "next/image";
 import {
   Plus,
@@ -30,7 +30,9 @@ import { toast } from "sonner";
 import { ProductFormDialog } from "@/components/products/product-form-dialog";
 import { ProductToolbar } from "@/components/products/product-toolbar";
 import { ProductCardGrid } from "@/components/products/product-card-grid";
+import { ProductsTable } from "@/components/products/products-table";
 import { ProductPagination } from "@/components/products/product-pagination";
+import { ProductBulkActions } from "@/components/products/product-bulk-actions";
 import type { CategoryNode } from "@/components/categories/category-tree";
 import {
   adaptProduct,
@@ -40,40 +42,36 @@ import {
   filterProductsByStock,
   paginateProducts,
   hasActiveFilters,
+  sortProducts,
   type AdaptedProduct,
   type StockStatus,
   type ProductStatus,
+  type SortOption,
   STOCK_STATUS_LABELS,
   MEDUSA_STATUS_LABELS,
   getStockBadgeVariant,
   getStatusVariant,
 } from "@/lib/products/product-filters";
 
-const DEFAULT_PAGE_SIZE = 30;
+const LS_VIEW_MODE_KEY = "admin-ui.products.viewMode";
 const LS_PAGE_SIZE_KEY = "admin-ui.products.pageSize";
+const LS_COLUMNS_KEY = "admin-ui.products.columns";
+const LS_SORT_KEY = "admin-ui.products.sort";
 
-/**
- * Build a category tree from flat list + handle include_descendants_tree.
- */
 function flattenCategories(cats: MedusaProductCategory[]): MedusaProductCategory[] {
   const result: MedusaProductCategory[] = [];
-
   function traverse(cat: MedusaProductCategory) {
     result.push(cat);
     if (cat.category_children && cat.category_children.length > 0) {
       cat.category_children.forEach((child) => traverse(child));
     }
   }
-
   cats.forEach((cat) => traverse(cat));
   return result;
 }
 
-function buildCategoryTree(
-  cats: MedusaProductCategory[]
-): CategoryNode[] {
+function buildCategoryTree(cats: MedusaProductCategory[]): CategoryNode[] {
   const flat = flattenCategories(cats);
-
   const map = new Map<string, CategoryNode>();
   const roots: CategoryNode[] = [];
 
@@ -118,7 +116,11 @@ function getCategoryNameById(nodes: CategoryNode[], id: string): string {
   return id;
 }
 
-function collectCategoryDescendants(nodes: CategoryNode[], targetId: string, found: Set<string> = new Set()): Set<string> {
+function collectCategoryDescendants(
+  nodes: CategoryNode[],
+  targetId: string,
+  found: Set<string> = new Set()
+): Set<string> {
   for (const node of nodes) {
     if (node.id === targetId) {
       node.children.forEach((child) => {
@@ -132,25 +134,52 @@ function collectCategoryDescendants(nodes: CategoryNode[], targetId: string, fou
 }
 
 export default function ProductsPage() {
+  // ─── State ───────────────────────────────────────────────────────────────
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<ProductStatus>("all");
   const [stockFilter, setStockFilter] = useState<StockStatus>("all");
   const [columns, setColumns] = useState(5);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState(30);
+  const [sort, setSort] = useState<SortOption>("newest_date");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<MedusaProduct | null>(null);
   const [viewProduct, setViewProduct] = useState<AdaptedProduct | null>(null);
 
+  // ─── localStorage init ──────────────────────────────────────────────────
   useEffect(() => {
+    const savedViewMode = localStorage.getItem(LS_VIEW_MODE_KEY);
+    if (savedViewMode === "grid" || savedViewMode === "list") {
+      setViewMode(savedViewMode);
+    }
     const savedPageSize = localStorage.getItem(LS_PAGE_SIZE_KEY);
     if (savedPageSize) {
       const parsed = parseInt(savedPageSize, 10);
-      if ([20, 30, 50, 100].includes(parsed)) setPageSize(parsed);
+      if ([30, 60, 90, 120].includes(parsed)) {
+        setPageSize(parsed);
+      }
+    }
+    const savedColumns = localStorage.getItem(LS_COLUMNS_KEY);
+    if (savedColumns) {
+      const parsed = parseInt(savedColumns, 10);
+      if ([4, 5, 6].includes(parsed)) {
+        setColumns(parsed);
+      }
+    }
+    const savedSort = localStorage.getItem(LS_SORT_KEY);
+    const validSorts: SortOption[] = [
+      "newest_date", "oldest_date", "name_asc", "name_desc",
+      "price_asc", "price_desc", "stock_asc",
+    ];
+    if (savedSort && validSorts.includes(savedSort as SortOption)) {
+      setSort(savedSort as SortOption);
     }
   }, []);
 
+  // ─── Data fetching ───────────────────────────────────────────────────────
   const { data, isLoading, isError, error, refetch } = useProducts({
     limit: 1000,
     q: search || undefined,
@@ -190,6 +219,7 @@ export default function ProductsPage() {
     [categoryTree, categoryFilter]
   );
 
+  // ─── Filter → Sort → Paginate ────────────────────────────────────────────
   const filteredProducts = useMemo(() => {
     let result = adaptedProducts;
     result = filterProductsBySearch(result, search);
@@ -199,18 +229,18 @@ export default function ProductsPage() {
     return result;
   }, [adaptedProducts, search, categoryFilter, statusFilter, stockFilter, categoryDescendants, categoryTree]);
 
+  const sortedProducts = useMemo(
+    () => sortProducts(filteredProducts, sort),
+    [filteredProducts, sort]
+  );
+
   const { items: paginatedProducts, total, totalPages } = useMemo(
-    () => paginateProducts(filteredProducts, page, pageSize),
-    [filteredProducts, page, pageSize]
+    () => paginateProducts(sortedProducts, page, pageSize),
+    [sortedProducts, page, pageSize]
   );
 
   const filters = useMemo(
-    () => ({
-      search,
-      categoryId: categoryFilter,
-      status: statusFilter,
-      stock: stockFilter,
-    }),
+    () => ({ search, categoryId: categoryFilter, status: statusFilter, stock: stockFilter }),
     [search, categoryFilter, statusFilter, stockFilter]
   );
 
@@ -226,6 +256,7 @@ export default function ProductsPage() {
     return labels;
   }, [search, categoryFilter, statusFilter, stockFilter, categoryTree]);
 
+  // ─── Mutations ────────────────────────────────────────────────────────────
   const deleteProduct = useDeleteProduct();
 
   const handleDelete = async (productId: string) => {
@@ -239,54 +270,107 @@ export default function ProductsPage() {
     }
   };
 
-  const handleSearchChange = (value: string) => {
+  const handleSync = (productId: string) => {
+    toast.info(`Đang đồng bộ sản phẩm ${productId}...`);
+  };
+
+  // ─── Handlers ────────────────────────────────────────────────────────────
+  const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
     setPage(0);
-  };
+  }, []);
 
-  const handleCategoryChange = (value: string) => {
+  const handleCategoryChange = useCallback((value: string) => {
     setCategoryFilter(value);
     setPage(0);
-  };
+  }, []);
 
-  const handleStatusChange = (value: ProductStatus) => {
+  const handleStatusChange = useCallback((value: ProductStatus) => {
     setStatusFilter(value);
     setPage(0);
-  };
+  }, []);
 
-  const handleStockChange = (value: StockStatus) => {
+  const handleStockChange = useCallback((value: StockStatus) => {
     setStockFilter(value);
     setPage(0);
-  };
+  }, []);
 
-  const handleColumnsChange = (value: number) => {
+  const handleColumnsChange = useCallback((value: number) => {
     setColumns(value);
-  };
+    localStorage.setItem(LS_COLUMNS_KEY, String(value));
+  }, []);
 
-  const handlePageSizeChange = (value: number) => {
+  const handlePageSizeChange = useCallback((value: number) => {
     setPageSize(value);
     localStorage.setItem(LS_PAGE_SIZE_KEY, String(value));
     setPage(0);
-  };
+  }, []);
 
-  const handleClearFilters = () => {
+  const handleSortChange = useCallback((value: SortOption) => {
+    setSort(value);
+    localStorage.setItem(LS_SORT_KEY, value);
+    setPage(0);
+  }, []);
+
+  const handleViewModeChange = useCallback((value: "grid" | "list") => {
+    setViewMode(value);
+    localStorage.setItem(LS_VIEW_MODE_KEY, value);
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
     setSearch("");
     setCategoryFilter("all");
     setStatusFilter("all");
     setStockFilter("all");
     setPage(0);
-  };
+  }, []);
 
+  // ─── Selection ───────────────────────────────────────────────────────────
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleSelectPage = useCallback(
+    (ids: string[]) => {
+      setSelectedIds((prev) => {
+        if (ids.length === 0) {
+          // deselect all on page
+          const next = new Set(prev);
+          paginatedProducts.forEach((p) => next.delete(p.id));
+          return next;
+        } else {
+          // select all on page
+          const next = new Set(prev);
+          ids.forEach((id) => next.add(id));
+          return next;
+        }
+      });
+    },
+    [paginatedProducts]
+  );
+
+  // ─── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 min-w-0 w-full">
+    <div className="space-y-4 min-w-0 w-full">
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between min-w-0">
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl truncate">
             Quản lý sản phẩm
           </h1>
-          <p className="text-muted-foreground hidden sm:block">
-            {totalCount > 0 ? `${totalCount} sản phẩm` : "Danh sách sản phẩm trong cửa hàng"}
+          <p className="text-muted-foreground hidden sm:block text-sm">
+            {totalCount > 0
+              ? `${totalCount} sản phẩm`
+              : "Danh sách sản phẩm trong cửa hàng"}
           </p>
         </div>
         <Button
@@ -312,9 +396,13 @@ export default function ProductsPage() {
             stock={stockFilter}
             onStockChange={handleStockChange}
             columns={columns}
-            onColumnsChange={handleColumnsChange}
             pageSize={pageSize}
+            sort={sort}
+            viewMode={viewMode}
+            onColumnsChange={handleColumnsChange}
             onPageSizeChange={handlePageSizeChange}
+            onSortChange={handleSortChange}
+            onViewModeChange={handleViewModeChange}
             onRefresh={() => refetch()}
             categoryTree={categoryTree}
             hasActiveFilters={hasActiveFilters(filters)}
@@ -324,12 +412,18 @@ export default function ProductsPage() {
         </CardContent>
       </Card>
 
-      {/* Loading state */}
+      {/* Bulk actions bar — appears when items are selected */}
+      <ProductBulkActions
+        selectedCount={selectedIds.size}
+        onClearSelection={handleClearSelection}
+      />
+
+      {/* Loading skeleton */}
       {isLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {Array.from({ length: 12 }).map((_, i) => (
             <Card key={i} className="overflow-hidden">
-              <Skeleton className="aspect-[4/3] rounded-none" />
+              <Skeleton className="aspect-square rounded-none" />
               <CardContent className="p-3 space-y-2">
                 <Skeleton className="h-3 w-full" />
                 <Skeleton className="h-3 w-2/3" />
@@ -374,15 +468,38 @@ export default function ProductsPage() {
         </Card>
       )}
 
-      {/* Product Grid */}
+      {/* Products */}
       {!isLoading && !isError && filteredProducts.length > 0 && (
         <>
-          <ProductCardGrid
-            products={paginatedProducts}
-            columns={columns}
-            onView={setViewProduct}
-            onDelete={handleDelete}
-          />
+          {viewMode === "grid" ? (
+            <ProductCardGrid
+              products={paginatedProducts}
+              columns={columns}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onView={setViewProduct}
+              onEdit={(p) => {
+                setEditingProduct(p.rawProduct);
+                setProductDialogOpen(true);
+              }}
+              onDelete={handleDelete}
+              onSync={handleSync}
+            />
+          ) : (
+            <ProductsTable
+              products={paginatedProducts}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onSelectAll={handleSelectPage}
+              onView={setViewProduct}
+              onEdit={(p) => {
+                setEditingProduct(p.rawProduct);
+                setProductDialogOpen(true);
+              }}
+              onDelete={handleDelete}
+              onSync={handleSync}
+            />
+          )}
 
           {/* Pagination */}
           <Card>
@@ -393,14 +510,13 @@ export default function ProductsPage() {
                 pageSize={pageSize}
                 total={total}
                 onPageChange={setPage}
-                onPageSizeChange={handlePageSizeChange}
               />
             </CardContent>
           </Card>
         </>
       )}
 
-      {/* Product Detail Modal */}
+      {/* Product detail modal */}
       <Dialog open={!!viewProduct} onOpenChange={() => setViewProduct(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
           <DialogHeader className="sr-only">
@@ -408,8 +524,8 @@ export default function ProductsPage() {
           </DialogHeader>
           {viewProduct && (
             <div className="flex flex-col">
-              {/* Image */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+                {/* Image — square */}
                 <div className="relative bg-muted aspect-square">
                   {viewProduct.image ? (
                     <Image
@@ -455,7 +571,7 @@ export default function ProductsPage() {
                   </div>
 
                   {/* Status badges */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant={getStockBadgeVariant(viewProduct.stock, viewProduct.stockStatus)}
                       className="gap-1"
@@ -490,9 +606,7 @@ export default function ProductsPage() {
 
                   {/* Actions */}
                   <div className="pt-4 border-t flex gap-2 flex-wrap">
-                    <Button
-                      onClick={() => setViewProduct(null)}
-                    >
+                    <Button onClick={() => setViewProduct(null)}>
                       <Pencil className="mr-2 size-4" />
                       Sửa sản phẩm
                     </Button>

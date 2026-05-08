@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "npm -r dev",
-    "build": "npm -r build",
+    "build": "npm -r run build",
     "start": "turbo start",
     "lint": "turbo lint",
     "test": "turbo test",

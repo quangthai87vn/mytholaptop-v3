@@ -3,6 +3,24 @@ import type { CategoryNode } from "@/components/categories/category-tree";
 
 export type StockStatus = "instock" | "outofstock" | "onbackorder" | "unknown" | "all";
 export type ProductStatus = "draft" | "published" | "proposed" | "rejected" | "archived" | "all";
+export type SortOption =
+  | "newest_date"
+  | "oldest_date"
+  | "name_asc"
+  | "name_desc"
+  | "price_asc"
+  | "price_desc"
+  | "stock_asc";
+
+export const SORT_LABELS: Record<SortOption, string> = {
+  newest_date: "Sắp xếp theo ngày mới nhất",
+  oldest_date: "Sắp xếp theo ngày cũ nhất",
+  name_asc: "Tên A-Z",
+  name_desc: "Tên Z-A",
+  price_asc: "Giá thấp đến cao",
+  price_desc: "Giá cao đến thấp",
+  stock_asc: "Tồn kho thấp trước",
+};
 
 /**
  * Rewrite image URLs inside HTML description for display.
@@ -72,6 +90,10 @@ export interface AdaptedProduct {
   tags: string[];
   metadata?: Record<string, string>;
   rawProduct: MedusaProduct;
+  /** ISO date string from Medusa created_at */
+  createdAt?: string;
+  /** Sync status derived from metadata */
+  syncStatus?: "synced" | "pending" | "failed" | "manual";
 }
 
 export interface ProductFilters {
@@ -117,6 +139,22 @@ export function getStatusVariant(
   return "outline";
 }
 
+export function getSyncStatusVariant(
+  status?: string
+): "success" | "warning" | "destructive" | "secondary" {
+  if (status === "synced") return "success";
+  if (status === "failed") return "destructive";
+  if (status === "pending") return "warning";
+  return "secondary";
+}
+
+export const SYNC_STATUS_LABELS: Record<string, string> = {
+  synced: "Đã đồng bộ",
+  pending: "Chờ đồng bộ",
+  failed: "Lỗi",
+  manual: "Thủ công",
+};
+
 export function getStockStatus(
   firstVariant: { inventory_quantity?: number | null } | undefined,
   meta?: Record<string, string>
@@ -131,25 +169,32 @@ export function getStockStatus(
   let stockValue: number;
   let stockStatus: StockStatus = "unknown";
 
-  // Ưu tiên 1: Medusa native inventory_quantity (stock do Medusa quản lý)
   if (medusaInventoryQty !== null && medusaInventoryQty !== undefined) {
     stockValue = medusaInventoryQty;
     stockStatus = medusaInventoryQty > 0 ? "instock" : "outofstock";
-  }
-  // Ưu tiên 2: WooCommerce manage stock với stock_quantity cụ thể
-  else if (wooManageStock && wooStockQty !== null && !isNaN(wooStockQty)) {
+  } else if (wooManageStock && wooStockQty !== null && !isNaN(wooStockQty)) {
     stockValue = wooStockQty;
     stockStatus = wooStockQty > 0 ? "instock" : "outofstock";
-  }
-  // Fallback 3: Dùng trực tiếp WooCommerce stock_status
-  else {
+  } else {
     stockValue = 999;
-    stockStatus = wooStockStatus === "outofstock" ? "outofstock"
-      : wooStockStatus === "onbackorder" ? "onbackorder"
-      : "instock";
+    stockStatus =
+      wooStockStatus === "outofstock"
+        ? "outofstock"
+        : wooStockStatus === "onbackorder"
+        ? "onbackorder"
+        : "instock";
   }
 
   return { stock: stockValue, stockStatus };
+}
+
+function deriveSyncStatus(meta?: Record<string, string>): AdaptedProduct["syncStatus"] {
+  if (!meta) return "manual";
+  if (meta.sync_status === "failed") return "failed";
+  if (meta.sync_status === "pending") return "pending";
+  if (meta.sync_status === "synced") return "synced";
+  if (meta.woo_id || meta.wordpress_id) return "synced";
+  return "manual";
 }
 
 export function adaptProduct(
@@ -195,7 +240,10 @@ export function adaptProduct(
     displayPrice = wooPrice;
   }
 
-  const { stock, stockStatus } = getStockStatus(firstVariant as { inventory_quantity?: number | null } | undefined, meta);
+  const { stock, stockStatus } = getStockStatus(
+    firstVariant as { inventory_quantity?: number | null } | undefined,
+    meta
+  );
 
   let tags: string[] = [];
   if (meta?.wordpress_tag_names) {
@@ -237,6 +285,8 @@ export function adaptProduct(
     tags,
     metadata: meta,
     rawProduct: p,
+    createdAt: p.created_at,
+    syncStatus: deriveSyncStatus(meta),
   };
 }
 
@@ -328,6 +378,52 @@ export function filterProductsByStock(
   return products.filter((p) => p.stockStatus === stock);
 }
 
+/** Client-side sort on the filtered + adapted product list */
+export function sortProducts(
+  products: AdaptedProduct[],
+  sort: SortOption
+): AdaptedProduct[] {
+  const arr = [...products];
+  switch (sort) {
+    case "newest_date":
+      return arr.sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime()
+      );
+    case "oldest_date":
+      return arr.sort(
+        (a, b) =>
+          new Date(a.createdAt || 0).getTime() -
+          new Date(b.createdAt || 0).getTime()
+      );
+    case "name_asc":
+      return arr.sort((a, b) => a.name.localeCompare(b.name, "vi"));
+    case "name_desc":
+      return arr.sort((a, b) => b.name.localeCompare(a.name, "vi"));
+    case "price_asc":
+      return arr.sort((a, b) => {
+        const pa = a.price ?? 0;
+        const pb = b.price ?? 0;
+        return pa - pb;
+      });
+    case "price_desc":
+      return arr.sort((a, b) => {
+        const pa = a.price ?? 0;
+        const pb = b.price ?? 0;
+        return pb - pa;
+      });
+    case "stock_asc":
+      return arr.sort((a, b) => {
+        const sa = a.stock ?? 9999;
+        const sb = b.stock ?? 9999;
+        return sa - sb;
+      });
+    default:
+      return arr;
+  }
+}
+
 export function paginateProducts(
   products: AdaptedProduct[],
   page: number,
@@ -342,9 +438,9 @@ export function paginateProducts(
 
 export function getActiveFilterLabels(filters: ProductFilters): string[] {
   const labels: string[] = [];
-  if (filters.search) labels.push(`Search: ${filters.search}`);
+  if (filters.search) labels.push(`Tìm: ${filters.search}`);
   if (filters.categoryId && filters.categoryId !== "all")
-    labels.push(`Danh mục: ${filters.categoryId}`);
+    labels.push(`Danh mục`);
   if (filters.status && filters.status !== "all")
     labels.push(`Trạng thái: ${MEDUSA_STATUS_LABELS[filters.status] || filters.status}`);
   if (filters.stock && filters.stock !== "all")

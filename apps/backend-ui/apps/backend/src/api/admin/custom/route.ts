@@ -22,10 +22,10 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
         __args: { filters: { sku: { $ilike: `%${q}%` } } },
         fields: ["id", "sku", "title", "description"],
       },
-    });
+    } as any);
 
     // For each inventory item, find associated variants and products
-    const enrichedItems = [];
+    const enrichedItems: any[] = [];
     for (const item of (inventoryItems || [])) {
       const variants = await remoteQuery({
         inventory_item: {
@@ -35,17 +35,17 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
             fields: ["id", "title", "sku", "product_id"],
           },
         },
-      });
+      } as any);
 
       const variantLinks = await remoteQuery({
         product_variant_inventory_item: {
           __args: { filters: { inventory_item_id: item.id } },
           fields: ["variant_id", "inventory_item_id"],
         },
-      });
+      } as any);
 
       // Get product info
-      let productInfo = null;
+      let productInfo: any = null;
       if (variantLinks && variantLinks.length > 0) {
         const variantId = variantLinks[0].variant_id;
         const variants2 = await remoteQuery({
@@ -56,7 +56,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
               fields: ["id", "title"],
             },
           },
-        });
+        } as any);
         if (variants2 && variants2.length > 0) {
           productInfo = variants2[0].product;
         }
@@ -86,7 +86,8 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
  * Returns: { success, deleted?, dryRun?, items: [...] }
  */
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
-  const { ids, skus, dryRun = false } = req.body || {};
+  const body = req.body as { ids?: string[]; skus?: string[]; dryRun?: boolean } | undefined;
+  const { ids, skus, dryRun = false } = body || {};
 
   if ((!ids || !ids.length) && (!skus || !skus.length)) {
     res.status(400).json({ error: "Phải cung cấp ids hoặc skus" });
@@ -112,7 +113,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
           __args: { filters: { sku: skus } },
           fields: ["id", "sku"],
         },
-      });
+      } as any);
       for (const item of (inventoryBySku || [])) {
         toDeleteIds.add(item.id);
       }
@@ -124,14 +125,14 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     }
 
     // Gather full info for each item BEFORE deleting
-    const itemDetails = [];
+    const itemDetails: any[] = [];
     for (const itemId of toDeleteIds) {
       const items = await remoteQuery({
         inventory_item: {
           __args: { filters: { id: itemId } },
           fields: ["id", "sku", "title", "description"],
         },
-      });
+      } as any);
       if (items && items.length > 0) {
         const item = items[0];
 
@@ -141,10 +142,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
             __args: { filters: { inventory_item_id: itemId } },
             fields: ["variant_id"],
           },
-        });
+        } as any);
 
-        let productTitle = null;
-        let variantTitle = null;
+        let productTitle: string | null = null;
+        let variantTitle: string | null = null;
         if (variantLinks && variantLinks.length > 0) {
           const variantInfo = await remoteQuery({
             product_variant: {
@@ -152,7 +153,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
               fields: ["id", "title", "sku"],
               product: { fields: ["id", "title"] },
             },
-          });
+          } as any);
           if (variantInfo && variantInfo.length > 0) {
             variantTitle = variantInfo[0].title || variantInfo[0].sku;
             productTitle = variantInfo[0].product?.title;
@@ -188,7 +189,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
           {
             inventory_item: { inventory_item_id: itemId },
           },
-        ]);
+        ] as any);
         deletedIds.push(itemId);
       } catch (e) {
         console.warn(`[inventory-delete] Failed to delete ${itemId}:`, e);
@@ -220,16 +221,16 @@ export async function DELETE(req: MedusaRequest, res: MedusaResponse) {
         __args: { filters: { sku } },
         fields: ["id", "sku"],
       },
-    });
+    } as any);
 
     if (!items || items.length === 0) {
       res.status(404).json({ error: `Không tìm thấy inventory item với SKU: ${sku}` });
       return;
     }
 
-    const deleted = [];
+    const deleted: string[] = [];
     for (const item of items) {
-      await remoteLink.delete([{ inventory_item: { inventory_item_id: item.id } }]);
+      await remoteLink.delete([{ inventory_item: { inventory_item_id: item.id } }] as any);
       deleted.push(item.id);
     }
 

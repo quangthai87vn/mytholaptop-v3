@@ -12,7 +12,9 @@ import {
   isChildActive,
   type NavItem,
 } from "@/lib/navigation";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { loadCompanySettings, DEFAULT_COMPANY } from "@/lib/company-settings";
+import type { CompanySettings } from "@/lib/company-settings";
 
 interface AdminMobileSidebarProps {
   open: boolean;
@@ -31,6 +33,21 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
     return initial;
   });
 
+  // ─── Company branding ───────────────────────────────────────────────
+  const [company, setCompany] = useState<CompanySettings>(DEFAULT_COMPANY);
+  const [logoError, setLogoError] = useState(false);
+
+  const reloadCompany = useCallback(() => {
+    setCompany(loadCompanySettings());
+    setLogoError(false);
+  }, []);
+
+  useEffect(() => {
+    reloadCompany();
+    window.addEventListener("company-settings-changed", reloadCompany);
+    return () => window.removeEventListener("company-settings-changed", reloadCompany);
+  }, [reloadCompany]);
+
   const toggleExpand = (title: string) => {
     setExpandedParents((prev) => {
       const next = new Set(prev);
@@ -47,10 +64,10 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
     if (hasChildren) {
       const parentIsOpen = isParentRoute(item, pathname);
 
-      // Parent styles: subtle active/open state (NOT solid red)
+      // Parent styles: open/active = red, default = dark grey
       const parentStyles = parentIsOpen
-        ? "bg-red-50 text-red-600 border-l-2 border-red-600"
-        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
+        ? "bg-red-50 text-red-600 border-l-2 border-red-600 font-semibold"
+        : "text-slate-700 hover:bg-red-50 hover:text-red-600";
 
       return (
         <div key={item.title} className="space-y-0.5">
@@ -86,8 +103,8 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
     const leafStyles = isActive
       ? "bg-red-600 text-white font-semibold shadow-sm"
       : isChildRoute
-      ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
+      ? "text-slate-600 hover:bg-red-50 hover:text-red-600"
+      : "text-slate-700 hover:bg-red-50 hover:text-red-600";
 
     return (
       <Link
@@ -113,16 +130,32 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
           <Link
             href="/dashboard"
             onClick={onClose}
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 min-w-0"
           >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary">
-              <Laptop className="size-5 text-white" />
+            {/* Logo image */}
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-primary/10">
+              {company.logoUrl && !logoError ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  className="h-full w-full object-contain"
+                  src={company.logoUrl}
+                  alt={company.name}
+                  onError={() => setLogoError(true)}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Laptop className="size-5 text-primary" />
+                </div>
+              )}
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-primary">Mỹ Tho</span>
-              <span className="text-xs font-medium text-foreground">
-                Laptop
-              </span>
+            {/* Company name */}
+            <div className="min-w-0">
+              <div
+                className="truncate whitespace-nowrap text-sm font-bold text-primary leading-tight"
+                title={company.name}
+              >
+                {company.name}
+              </div>
             </div>
           </Link>
         </SheetHeader>

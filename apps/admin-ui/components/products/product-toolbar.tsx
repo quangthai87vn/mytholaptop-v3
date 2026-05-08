@@ -17,7 +17,7 @@ import { ProductCategoryTreeFilter } from "./product-category-tree-filter";
 import { ProductGridSettings } from "./product-grid-settings";
 import { Separator } from "@/components/ui/separator";
 import type { CategoryNode } from "@/components/categories/category-tree";
-import type { StockStatus, ProductStatus } from "@/lib/products/product-filters";
+import type { StockStatus, ProductStatus, SortOption } from "@/lib/products/product-filters";
 
 interface ProductToolbarProps {
   search: string;
@@ -29,9 +29,13 @@ interface ProductToolbarProps {
   stock: StockStatus;
   onStockChange: (value: StockStatus) => void;
   columns: number;
-  onColumnsChange: (value: number) => void;
   pageSize: number;
+  sort: SortOption;
+  viewMode: "grid" | "list";
+  onColumnsChange: (value: number) => void;
   onPageSizeChange: (value: number) => void;
+  onSortChange: (value: SortOption) => void;
+  onViewModeChange: (value: "grid" | "list") => void;
   onRefresh: () => void;
   categoryTree: CategoryNode[];
   hasActiveFilters: boolean;
@@ -49,9 +53,13 @@ export function ProductToolbar({
   stock,
   onStockChange,
   columns,
-  onColumnsChange,
   pageSize,
+  sort,
+  viewMode,
+  onColumnsChange,
   onPageSizeChange,
+  onSortChange,
+  onViewModeChange,
   onRefresh,
   categoryTree,
   hasActiveFilters,
@@ -64,21 +72,21 @@ export function ProductToolbar({
     <div className="space-y-3 min-w-0">
       {/* Desktop/Tablet: Full toolbar */}
       <div className="hidden sm:block">
-        {/* Search and filters in a flex wrap container */}
-        <div className="flex flex-col xl:flex-row gap-3 items-stretch xl:items-center">
-          {/* Search - full width on small screens, auto on xl */}
-          <div className="relative w-full xl:flex-1 xl:max-w-md">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Tìm kiếm tên, SKU..."
-              className="pl-9 h-10 w-full"
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-          </div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {/* Left: Search + Filters */}
+          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+            {/* Search */}
+            <div className="relative w-56 xl:w-72 shrink-0">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Tìm kiếm tên, SKU..."
+                className="pl-9 h-10 w-full"
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+              />
+            </div>
 
-          {/* Filters - wrap on overflow */}
-          <div className="flex flex-wrap gap-2 items-center">
+            {/* Filters */}
             <ProductCategoryTreeFilter
               value={categoryId}
               onChange={onCategoryChange}
@@ -125,43 +133,47 @@ export function ProductToolbar({
               <RefreshCw className="size-4" />
             </Button>
           </div>
-        </div>
 
-        {/* Active filters + settings row */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3">
-          {/* Filter badges */}
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            {filterLabels.map((label, i) => (
-              <Badge key={i} variant="secondary" className="gap-1 text-xs">
-                {label}
-              </Badge>
-            ))}
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClearFilters}
-                className="h-6 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3" />
-                Xoá bộ lọc
-              </Button>
+          {/* Right: Sort + View toggle + Column selector + Page size */}
+          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+            {/* Filter badges */}
+            {filterLabels.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {filterLabels.map((label, i) => (
+                  <Badge key={i} variant="secondary" className="gap-1 text-xs">
+                    {label}
+                  </Badge>
+                ))}
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClearFilters}
+                    className="h-6 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3" />
+                    Xoá bộ lọc
+                  </Button>
+                )}
+              </div>
             )}
-          </div>
 
-          {/* Grid settings */}
-          <ProductGridSettings
-            columns={columns}
-            pageSize={pageSize}
-            onColumnsChange={onColumnsChange}
-            onPageSizeChange={onPageSizeChange}
-          />
+            <ProductGridSettings
+              columns={columns}
+              pageSize={pageSize}
+              sort={sort}
+              viewMode={viewMode}
+              onColumnsChange={onColumnsChange}
+              onPageSizeChange={onPageSizeChange}
+              onSortChange={onSortChange}
+              onViewModeChange={onViewModeChange}
+            />
+          </div>
         </div>
       </div>
 
       {/* Mobile: Search + Filter button */}
       <div className="flex sm:hidden gap-2">
-        {/* Mobile search - full width */}
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -172,7 +184,6 @@ export function ProductToolbar({
           />
         </div>
 
-        {/* Mobile filter button */}
         <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
           <SheetTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
@@ -266,8 +277,12 @@ export function ProductToolbar({
                 <ProductGridSettings
                   columns={columns}
                   pageSize={pageSize}
+                  sort={sort}
+                  viewMode={viewMode}
                   onColumnsChange={onColumnsChange}
                   onPageSizeChange={onPageSizeChange}
+                  onSortChange={onSortChange}
+                  onViewModeChange={onViewModeChange}
                 />
               </div>
 

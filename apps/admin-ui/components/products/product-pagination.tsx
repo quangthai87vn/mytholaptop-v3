@@ -2,13 +2,6 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface ProductPaginationProps {
   page: number;
@@ -16,8 +9,9 @@ interface ProductPaginationProps {
   pageSize: number;
   total: number;
   onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
 }
+
+const PAGE_SIZE_OPTIONS = [30, 60, 90, 120];
 
 export function ProductPagination({
   page,
@@ -25,54 +19,43 @@ export function ProductPagination({
   pageSize,
   total,
   onPageChange,
-  onPageSizeChange,
 }: ProductPaginationProps) {
   const hasPrev = page > 0;
   const hasNext = page < totalPages - 1;
+  const start = total > 0 ? page * pageSize + 1 : 0;
+  const end = Math.min((page + 1) * pageSize, total);
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-muted-foreground">
-          Hiển thị {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} / {total} sản phẩm
+      {/* Left: info */}
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          Hiển thị {start}–{end} / {total} sản phẩm
         </span>
-        <span className="hidden sm:inline text-muted-foreground">|</span>
-        <span className="text-sm text-muted-foreground hidden sm:inline">
-          Trang {page + 1} / {totalPages}
-        </span>
-        <Select
-          value={String(pageSize)}
-          onValueChange={(v) => onPageSizeChange(Number(v))}
-        >
-          <SelectTrigger className="w-28 h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[20, 30, 50, 100].map((size) => (
-              <SelectItem key={size} value={String(size)}>
-                {size} / trang
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
+      {/* Right: page controls */}
       <div className="flex items-center gap-2">
+        {/* Prev */}
         <Button
           variant="outline"
           size="sm"
           onClick={() => onPageChange(page - 1)}
           disabled={!hasPrev}
-          className="gap-1"
+          className="gap-1 h-8 px-2"
         >
           <ChevronLeft className="size-4" />
-          Trước
+          <span className="hidden sm:inline">Trước</span>
         </Button>
 
+        {/* Page numbers */}
         <div className="flex items-center gap-1">
           {getPageNumbers(page, totalPages).map((p, i) =>
             p === "..." ? (
-              <span key={`ellipsis-${i}`} className="px-1 text-muted-foreground">
+              <span
+                key={`ellipsis-${i}`}
+                className="px-1 text-muted-foreground text-sm select-none"
+              >
                 ...
               </span>
             ) : (
@@ -83,20 +66,21 @@ export function ProductPagination({
                 onClick={() => onPageChange(p as number)}
                 className="size-8"
               >
-                {p}
+                {(p as number) + 1}
               </Button>
             )
           )}
         </div>
 
+        {/* Next */}
         <Button
           variant="outline"
           size="sm"
           onClick={() => onPageChange(page + 1)}
           disabled={!hasNext}
-          className="gap-1"
+          className="gap-1 h-8 px-2"
         >
-          Sau
+          <span className="hidden sm:inline">Sau</span>
           <ChevronRight className="size-4" />
         </Button>
       </div>
@@ -108,6 +92,7 @@ function getPageNumbers(
   current: number,
   total: number
 ): (number | "...")[] {
+  if (total <= 1) return [];
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i);
   }
