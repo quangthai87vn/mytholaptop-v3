@@ -1,0 +1,31 @@
+# Dependencies
+node_modules
+.pnpm-store
+.turbo
+*.tgz
+
+# Build outputs (will be generated during build)
+.dist
+build
+
+# Git
+.git
+.gitignore
+
+# IDE & configs
+.cursor
+.idea
+.vscode
+*.md
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+*.tmp
+
+# Not needed for backend (only need apps/backend)
+apps/storefront

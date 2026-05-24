@@ -1,0 +1,54 @@
+# Dependencies
+node_modules
+.npm
+.pnpm-store
+.pnpm
+.turbo
+*.tgz
+
+# Build outputs
+.next
+out
+dist
+build
+.turbo
+
+# Packages (monorepo)
+packages
+
+# Git
+.git
+.gitignore
+
+# IDE & configs
+.cursor
+.idea
+.vscode
+*.md
+!README.md
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Docs & misc
+docs
+scripts
+*.log
+*.tmp
+
+# Not needed for frontend
+apps/website-ui
+
+# WordPress uploads (huge, not needed)
+public/wp-content
+
+# Lock files - keep pnpm-lock.yaml (needed by Dockerfile COPY)
+package-lock.json
+yarn.lock

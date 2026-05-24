@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+.pnpm-store
+.turbo
+*.tgz
+
+# Build outputs
+dist
+build
+.medusa
+
+# Git
+.git
+.gitignore
+
+# IDE & configs
+.cursor
+.idea
+.vscode
+*.md
+
+# Environment & secrets
+.env
+.env.*
+
+# Logs
+*.log
+*.tmp
+
+# Admin UI (not needed for backend)
+apps/admin-ui
+apps/website-ui
+
+# Storefront (not needed for backend)
+apps/backend-ui/apps/storefront
+
+# Root-level configs that should not be copied to backend
+apps
+!apps/backend-ui/apps/backend
