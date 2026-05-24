@@ -26,6 +26,18 @@ import {
   getUser,
   inviteUser,
   getDashboardStats,
+  listCollections,
+  getCollection,
+  createCollection,
+  updateCollection,
+  deleteCollection,
+  deleteCollections,
+  listProductTypes,
+  getProductType,
+  createProductType,
+  updateProductType,
+  deleteProductType,
+  deleteProductTypes,
 } from "@/services/medusa-api.service";
 import type {
   ProductFilter,
@@ -41,6 +53,12 @@ import type {
   CreateTagInput,
   UpdateTagInput,
   InviteUserInput,
+  CollectionFilter,
+  CreateCollectionInput,
+  UpdateCollectionInput,
+  ProductTypeFilter,
+  CreateProductTypeInput,
+  UpdateProductTypeInput,
 } from "@/services/medusa-types";
 
 // ============================================================
@@ -64,6 +82,10 @@ const QUERY_KEYS = {
   category: (id: string) => ["category", id] as const,
   tags: (filter?: TagFilter) => ["tags", filter] as const,
   tag: (id: string) => ["tag", id] as const,
+  collections: (filter?: CollectionFilter) => ["collections", filter] as const,
+  collection: (id: string) => ["collection", id] as const,
+  productTypes: (filter?: ProductTypeFilter) => ["product-types", filter] as const,
+  productType: (id: string) => ["product-type", id] as const,
   orders: (filter?: OrderFilter) => ["orders", filter] as const,
   order: (id: string) => ["order", id] as const,
   customers: (filter?: CustomerFilter) => ["customers", filter] as const,
@@ -377,6 +399,202 @@ export function useDeleteTag() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
+    },
+  });
+}
+
+// ============================================================
+// COLLECTIONS (BRANDS)
+// ============================================================
+
+export function useCollections(filter?: CollectionFilter) {
+  const { data: configured } = useMedusaConfigured();
+  return useQuery({
+    queryKey: QUERY_KEYS.collections(filter),
+    queryFn: async () => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa. Vui lòng vào Settings để thiết lập.");
+      return listCollections(config, filter);
+    },
+    staleTime: 1000 * 60 * 5,
+    enabled: !!configured,
+  });
+}
+
+export function useCollection(id: string | null) {
+  const { data: configured } = useMedusaConfigured();
+  return useQuery({
+    queryKey: QUERY_KEYS.collection(id ?? ""),
+    queryFn: async () => {
+      if (!id) throw new Error("Collection ID is required");
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return getCollection(config, id);
+    },
+    staleTime: 1000 * 60 * 5,
+    enabled: !!configured && !!id,
+  });
+}
+
+export function useCreateCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (collection: CreateCollectionInput) => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return createCollection(config, collection);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+}
+
+export function useUpdateCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      collectionId,
+      collection,
+    }: {
+      collectionId: string;
+      collection: UpdateCollectionInput;
+    }) => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return updateCollection(config, collectionId, collection);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.collection(variables.collectionId),
+      });
+    },
+  });
+}
+
+export function useDeleteCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (collectionId: string) => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return deleteCollection(config, collectionId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+}
+
+export function useDeleteCollections() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (collectionIds: string[]) => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return deleteCollections(config, collectionIds);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+  });
+}
+
+// ============================================================
+// PRODUCT TYPES (ATTRIBUTES)
+// ============================================================
+
+export function useProductTypes(filter?: ProductTypeFilter) {
+  const { data: configured } = useMedusaConfigured();
+  return useQuery({
+    queryKey: QUERY_KEYS.productTypes(filter),
+    queryFn: async () => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa. Vui lòng vào Settings để thiết lập.");
+      return listProductTypes(config, filter);
+    },
+    staleTime: 1000 * 60 * 5,
+    enabled: !!configured,
+  });
+}
+
+export function useProductType(id: string | null) {
+  const { data: configured } = useMedusaConfigured();
+  return useQuery({
+    queryKey: QUERY_KEYS.productType(id ?? ""),
+    queryFn: async () => {
+      if (!id) throw new Error("Product type ID is required");
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return getProductType(config, id);
+    },
+    staleTime: 1000 * 60 * 5,
+    enabled: !!configured && !!id,
+  });
+}
+
+export function useCreateProductType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (type: CreateProductTypeInput) => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return createProductType(config, type);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-types"] });
+    },
+  });
+}
+
+export function useUpdateProductType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      typeId,
+      type,
+    }: {
+      typeId: string;
+      type: UpdateProductTypeInput;
+    }) => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return updateProductType(config, typeId, type);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["product-types"] });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.productType(variables.typeId),
+      });
+    },
+  });
+}
+
+export function useDeleteProductType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (typeId: string) => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return deleteProductType(config, typeId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-types"] });
+    },
+  });
+}
+
+export function useDeleteProductTypes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (typeIds: string[]) => {
+      const config = await getMedusaSettings();
+      if (!config) throw new Error("Chưa cấu hình Medusa");
+      return deleteProductTypes(config, typeIds);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-types"] });
     },
   });
 }

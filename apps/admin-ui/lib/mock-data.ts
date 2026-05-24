@@ -868,6 +868,9 @@ export const MOCK_AI_PRODUCTS: AIProduct[] = [
     image: "/wp-content/uploads/2024/03/Dell-Inspiron-3593.png",
     description: "Laptop Dell Inspiron 15 5510 - CPU Intel Core i5-1135G7, RAM 8GB, SSD 512GB, màn hình 15.6 inch FHD.",
     brand: "Dell",
+    stock: 12,
+    stockStatus: "in_stock" as const,
+    status: "published",
   },
   {
     id: "prod-ai-2",
@@ -879,6 +882,9 @@ export const MOCK_AI_PRODUCTS: AIProduct[] = [
     image: "/wp-content/uploads/2024/04/product-00.gif",
     description: "MacBook Air M2 - Chip Apple M2, RAM 8GB, SSD 256GB, màn hình 13.6 inch Liquid Retina.",
     brand: "Apple",
+    stock: 5,
+    stockStatus: "in_stock" as const,
+    status: "published",
   },
   {
     id: "prod-ai-3",
@@ -890,6 +896,9 @@ export const MOCK_AI_PRODUCTS: AIProduct[] = [
     image: "/wp-content/uploads/2024/03/Lenovo-ThinkCentre-M710S.png",
     description: "Laptop Lenovo ThinkPad E14 Gen 4 - CPU Intel Core i5-1235U, RAM 16GB, SSD 512GB.",
     brand: "Lenovo",
+    stock: 8,
+    stockStatus: "in_stock" as const,
+    status: "published",
   },
   {
     id: "prod-ai-4",
@@ -901,6 +910,9 @@ export const MOCK_AI_PRODUCTS: AIProduct[] = [
     image: "/wp-content/uploads/2024/03/product-00-2.gif",
     description: "Laptop ASUS ROG Strix G15 - CPU AMD Ryzen 7 6800H, RAM 16GB, RTX 3050, 144Hz.",
     brand: "ASUS",
+    stock: 3,
+    stockStatus: "in_stock" as const,
+    status: "published",
   },
   {
     id: "prod-ai-5",
@@ -912,6 +924,9 @@ export const MOCK_AI_PRODUCTS: AIProduct[] = [
     image: "/wp-content/uploads/2024/03/HP-Pavilion-15-eg0542TU.png",
     description: "Laptop HP Pavilion 15 - CPU Intel Core i5-1235U, RAM 8GB, SSD 512GB, màn hình 15.6 inch.",
     brand: "HP",
+    stock: 0,
+    stockStatus: "out_of_stock" as const,
+    status: "published",
   },
 ];
 

@@ -20,12 +20,12 @@ export async function GET(
     const { id } = await params;
     const schedule = await getScheduleById(parseInt(id, 10));
     if (!schedule) {
-      return NextResponse.json({ error: "Khong tim thay lich" }, { status: 404 });
+      return NextResponse.json({ error: "Không tìm thấy lịch" }, { status: 404 });
     }
     return NextResponse.json({ data: schedule });
   } catch (err) {
     console.error("[Schedule GET]", err);
-    return NextResponse.json({ error: "Loi khi lay lich" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi lấy lịch" }, { status: 500 });
   }
 }
 
@@ -38,12 +38,12 @@ export async function PUT(
     const body = await req.json();
     const updated = await updateSchedule(parseInt(id, 10), body);
     if (!updated) {
-      return NextResponse.json({ error: "Khong tim thay lich" }, { status: 404 });
+      return NextResponse.json({ error: "Không tìm thấy lịch" }, { status: 404 });
     }
     return NextResponse.json({ data: updated });
   } catch (err) {
     console.error("[Schedule PUT]", err);
-    return NextResponse.json({ error: "Loi khi cap nhat lich" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi cập nhật lịch" }, { status: 500 });
   }
 }
 
@@ -55,11 +55,11 @@ export async function DELETE(
     const { id } = await params;
     const deleted = await deleteSchedule(parseInt(id, 10));
     if (!deleted) {
-      return NextResponse.json({ error: "Khong tim thay lich" }, { status: 404 });
+      return NextResponse.json({ error: "Không tìm thấy lịch" }, { status: 404 });
     }
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[Schedule DELETE]", err);
-    return NextResponse.json({ error: "Loi khi xoa lich" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi xóa lịch" }, { status: 500 });
   }
 }

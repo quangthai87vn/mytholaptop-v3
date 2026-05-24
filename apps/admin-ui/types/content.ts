@@ -29,7 +29,7 @@ export type ImageStyle =
   | "gaming"
   | "professional"
   | "colorful";
-export type AIProvider = "openai" | "gemini" | "ollama" | "lm_studio";
+export type AIProvider = "openai" | "gemini" | "deepseek" | "huggingface" | "ollama" | "lmstudio" | "openai-compatible";
 
 // Base content
 export interface BaseContent {
@@ -169,6 +169,20 @@ export interface AIProduct {
   image: string;
   description: string;
   brand: string;
+  // Thêm từ adaptProduct để AI có context đầy đủ
+  stock: number;
+  stockStatus: "in_stock" | "out_of_stock" | "backorder" | "unknown";
+  status: string;
+  compareAtPrice?: number;
+  metadata?: Record<string, string>;
+  /** Dùng để build rich context cho AI prompt */
+  specs?: string[];
+  /** SEO title từ metadata */
+  seoTitle?: string;
+  /** SEO description từ metadata */
+  seoDescription?: string;
+  /** Mô tả ngắn gọn để AI hiểu nhanh */
+  shortDescription?: string;
 }
 
 // Content Stats for Dashboard

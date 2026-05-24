@@ -79,7 +79,7 @@ export default function CalendarPage() {
         setSchedules(result.data || []);
       }
     } catch {
-      toast.error("Loi khi lay lich");
+      toast.error("Lỗi khi lấy lịch");
     } finally {
       setLoading(false);
     }
@@ -105,14 +105,14 @@ export default function CalendarPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Lich dang bai</h1>
+          <h1 className="text-2xl font-bold">Lịch đăng bài</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Quan ly lich dang noi dung len cac nen tang
+            Quản lý lịch đăng nội dung lên các nền tảng
           </p>
         </div>
         <Button asChild className="gap-2">
           <a href="/content/ai-generator">
-            Tao noi dung
+            Tao nội dung
           </a>
         </Button>
       </div>
@@ -129,7 +129,7 @@ export default function CalendarPage() {
                 className="gap-1"
               >
                 <Calendar className="size-4" />
-                Lich
+                Lịch
               </Button>
               <Button
                 variant={viewMode === "list" ? "default" : "outline"}
@@ -138,7 +138,7 @@ export default function CalendarPage() {
                 className="gap-1"
               >
                 <List className="size-4" />
-                Danh sach
+                Danh sách
               </Button>
             </div>
 
@@ -289,7 +289,7 @@ export default function CalendarPage() {
               </div>
             ) : schedules.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
-                Khong co lich dang nao
+                Không có lịch đăng nào
               </div>
             ) : (
               <div className="divide-y">
@@ -357,9 +357,9 @@ export default function CalendarPage() {
                           className="shrink-0"
                         >
                           {s.status === "published"
-                            ? "Da dang"
+                            ? "Đã đăng"
                             : s.status === "pending"
-                            ? "Dang cho"
+                            ? "Đang chờ"
                             : s.status}
                         </Badge>
                       </div>

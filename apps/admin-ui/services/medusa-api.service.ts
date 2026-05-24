@@ -33,6 +33,16 @@ import type {
   CreateUserInput,
   InviteUserInput,
   DashboardStats,
+  // Brands / Collections
+  MedusaCollection,
+  CollectionFilter,
+  CreateCollectionInput,
+  UpdateCollectionInput,
+  // Attributes / Product Types
+  MedusaProductType,
+  ProductTypeFilter,
+  CreateProductTypeInput,
+  UpdateProductTypeInput,
 } from "./medusa-types";
 
 // ============================================================
@@ -684,4 +694,209 @@ export async function getDashboardStats(
     const message = err instanceof Error ? err.message : "Unknown error";
     return { success: false, error: message };
   }
+}
+
+// ============================================================
+// COLLECTIONS (BRANDS)
+// ============================================================
+
+export async function listCollections(
+  config: MedusaConfig,
+  filter?: CollectionFilter
+): Promise<MedusaApiResponse<PaginatedResponse<MedusaCollection>>> {
+  const params = new URLSearchParams();
+  if (filter?.limit) params.set("limit", String(filter.limit));
+  if (filter?.offset) params.set("offset", String(filter.offset));
+  if (filter?.fields) params.set("fields", filter.fields);
+  if (filter?.expand) params.set("expand", filter.expand);
+  if (filter?.q) params.set("q", filter.q);
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return medusaRequest<PaginatedResponse<MedusaCollection>>(
+    `/admin/collections${query}`,
+    config
+  );
+}
+
+export async function getCollection(
+  config: MedusaConfig,
+  collectionId: string
+): Promise<MedusaApiResponse<MedusaCollection>> {
+  const result = await medusaRequest<{ collection: MedusaCollection }>(
+    `/admin/collections/${collectionId}?fields=*`,
+    config
+  );
+  if (result.success && result.data) {
+    return { success: true, data: result.data.collection };
+  }
+  return { success: false, error: result.error };
+}
+
+export async function createCollection(
+  config: MedusaConfig,
+  collection: CreateCollectionInput
+): Promise<MedusaApiResponse<MedusaCollection>> {
+  const result = await medusaRequest<{ collection: MedusaCollection }>(
+    "/admin/collections",
+    config,
+    { method: "POST", body: collection }
+  );
+  if (result.success && result.data) {
+    return { success: true, data: result.data.collection };
+  }
+  return { success: false, error: result.error };
+}
+
+export async function updateCollection(
+  config: MedusaConfig,
+  collectionId: string,
+  collection: UpdateCollectionInput
+): Promise<MedusaApiResponse<MedusaCollection>> {
+  const result = await medusaRequest<{ collection: MedusaCollection }>(
+    `/admin/collections/${collectionId}`,
+    config,
+    { method: "POST", body: collection }
+  );
+  if (result.success && result.data) {
+    return { success: true, data: result.data.collection };
+  }
+  return { success: false, error: result.error };
+}
+
+export async function deleteCollection(
+  config: MedusaConfig,
+  collectionId: string
+): Promise<MedusaApiResponse<{ id: string; deleted: boolean }>> {
+  return medusaRequest<{ id: string; deleted: boolean }>(
+    `/admin/collections/${collectionId}`,
+    config,
+    { method: "DELETE" }
+  );
+}
+
+export async function deleteCollections(
+  config: MedusaConfig,
+  collectionIds: string[]
+): Promise<MedusaApiResponse<{ id: string; deleted: boolean }[]>> {
+  const result = await Promise.all(
+    collectionIds.map((id) =>
+      medusaRequest<{ id: string; deleted: boolean }>(
+        `/admin/collections/${id}`,
+        config,
+        { method: "DELETE" }
+      )
+    )
+  );
+
+  const all = result.flatMap((r) => (r.data ? [r.data] : []));
+  const failed = result.filter((r) => !r.success);
+
+  return {
+    success: failed.length === 0,
+    data: all,
+    error:
+      failed.length > 0 ? `${failed.length} collections failed to delete` : undefined,
+  };
+}
+
+// ============================================================
+// PRODUCT TYPES (ATTRIBUTES)
+// ============================================================
+
+export async function listProductTypes(
+  config: MedusaConfig,
+  filter?: ProductTypeFilter
+): Promise<MedusaApiResponse<PaginatedResponse<MedusaProductType>>> {
+  const params = new URLSearchParams();
+  if (filter?.limit) params.set("limit", String(filter.limit));
+  if (filter?.offset) params.set("offset", String(filter.offset));
+  if (filter?.fields) params.set("fields", filter.fields);
+  if (filter?.q) params.set("q", filter.q);
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return medusaRequest<PaginatedResponse<MedusaProductType>>(
+    `/admin/product-types${query}`,
+    config
+  );
+}
+
+export async function getProductType(
+  config: MedusaConfig,
+  typeId: string
+): Promise<MedusaApiResponse<MedusaProductType>> {
+  const result = await medusaRequest<{ product_type: MedusaProductType }>(
+    `/admin/product-types/${typeId}?fields=*`,
+    config
+  );
+  if (result.success && result.data) {
+    return { success: true, data: result.data.product_type };
+  }
+  return { success: false, error: result.error };
+}
+
+export async function createProductType(
+  config: MedusaConfig,
+  type: CreateProductTypeInput
+): Promise<MedusaApiResponse<MedusaProductType>> {
+  const result = await medusaRequest<{ product_type: MedusaProductType }>(
+    "/admin/product-types",
+    config,
+    { method: "POST", body: type }
+  );
+  if (result.success && result.data) {
+    return { success: true, data: result.data.product_type };
+  }
+  return { success: false, error: result.error };
+}
+
+export async function updateProductType(
+  config: MedusaConfig,
+  typeId: string,
+  type: UpdateProductTypeInput
+): Promise<MedusaApiResponse<MedusaProductType>> {
+  const result = await medusaRequest<{ product_type: MedusaProductType }>(
+    `/admin/product-types/${typeId}`,
+    config,
+    { method: "POST", body: type }
+  );
+  if (result.success && result.data) {
+    return { success: true, data: result.data.product_type };
+  }
+  return { success: false, error: result.error };
+}
+
+export async function deleteProductType(
+  config: MedusaConfig,
+  typeId: string
+): Promise<MedusaApiResponse<{ id: string; deleted: boolean }>> {
+  return medusaRequest<{ id: string; deleted: boolean }>(
+    `/admin/product-types/${typeId}`,
+    config,
+    { method: "DELETE" }
+  );
+}
+
+export async function deleteProductTypes(
+  config: MedusaConfig,
+  typeIds: string[]
+): Promise<MedusaApiResponse<{ id: string; deleted: boolean }[]>> {
+  const result = await Promise.all(
+    typeIds.map((id) =>
+      medusaRequest<{ id: string; deleted: boolean }>(
+        `/admin/product-types/${id}`,
+        config,
+        { method: "DELETE" }
+      )
+    )
+  );
+
+  const all = result.flatMap((r) => (r.data ? [r.data] : []));
+  const failed = result.filter((r) => !r.success);
+
+  return {
+    success: failed.length === 0,
+    data: all,
+    error:
+      failed.length > 0 ? `${failed.length} product types failed to delete` : undefined,
+  };
 }

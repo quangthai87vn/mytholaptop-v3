@@ -75,7 +75,7 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ c
   facebook_post: { label: "Facebook", icon: Facebook, color: "text-blue-600", bg: "bg-blue-100" },
   seo_article: { label: "Website", icon: Globe, color: "text-green-600", bg: "bg-green-100" },
   video_script: { label: "Video", icon: Video, color: "text-red-600", bg: "bg-red-100" },
-  image_prompt: { label: "Anh", icon: ImageIcon, color: "text-purple-600", bg: "bg-purple-100" },
+  image_prompt: { label: "Ảnh", icon: ImageIcon, color: "text-purple-600", bg: "bg-purple-100" },
 };
 
 export default function TemplatesPage() {
@@ -123,7 +123,7 @@ export default function TemplatesPage() {
         setTemplates(mapped);
       }
     } catch {
-      toast.error("Loi khi lay danh sach template");
+      toast.error("Lỗi khi lấy danh sách template");
     } finally {
       setLoading(false);
     }
@@ -144,28 +144,28 @@ export default function TemplatesPage() {
 
   const handleCopy = (t: UITemplate) => {
     navigator.clipboard.writeText(t.template);
-    toast.success("Da copy template!");
+      toast.success("Đã copy template!");
   };
 
   const handleDelete = async (t: UITemplate) => {
     if (!t._dbId) return;
-    if (!confirm(`Xoa template "${t.name}"?`)) return;
+    if (!confirm(`Xóa template "${t.name}"?`)) return;
     try {
       const res = await fetch(`/api/content/templates/${t._dbId}`, { method: "DELETE" });
       if (res.ok) {
-        toast.success("Da xoa template!");
+        toast.success("Đã xóa template!");
         await fetchTemplates();
       } else {
-        toast.error("Loi khi xoa template");
+        toast.error("Lỗi khi xóa template");
       }
     } catch {
-      toast.error("Loi khi xoa template");
+      toast.error("Lỗi khi xóa template");
     }
   };
 
   const handleSaveCreate = async () => {
     if (!form.template_name || !form.user_template) {
-      toast.error("Ten va noi dung template la bat buoc");
+      toast.error("Tên và nội dung template là bắt buộc");
       return;
     }
     setSaving(true);
@@ -186,16 +186,16 @@ export default function TemplatesPage() {
         }),
       });
       if (res.ok) {
-        toast.success("Da tao template thanh cong!");
+        toast.success("Đã tạo template thành công!");
         setCreateOpen(false);
         setForm({ template_name: "", content_type: "facebook", system_prompt: "", user_template: "", variables: "", tone_options: "" });
         await fetchTemplates();
       } else {
         const err = await res.json();
-        toast.error(err.error || "Loi khi tao template");
+        toast.error(err.error || "Lỗi khi tạo template");
       }
     } catch {
-      toast.error("Loi khi tao template");
+      toast.error("Lỗi khi tạo template");
     } finally {
       setSaving(false);
     }
@@ -204,7 +204,7 @@ export default function TemplatesPage() {
   const handleSaveEdit = async () => {
     if (!editTemplate?._dbId) return;
     if (!form.template_name || !form.user_template) {
-      toast.error("Ten va noi dung template la bat buoc");
+      toast.error("Tên và nội dung template là bắt buộc");
       return;
     }
     setSaving(true);
@@ -226,14 +226,14 @@ export default function TemplatesPage() {
         }),
       });
       if (res.ok) {
-        toast.success("Da cap nhat template!");
+        toast.success("Đã cập nhật template!");
         setEditTemplate(null);
         await fetchTemplates();
       } else {
-        toast.error("Loi khi cap nhat template");
+        toast.error("Lỗi khi cập nhật template");
       }
     } catch {
-      toast.error("Loi khi cap nhat template");
+      toast.error("Lỗi khi cập nhật template");
     } finally {
       setSaving(false);
     }
@@ -256,14 +256,14 @@ export default function TemplatesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Mau noi dung</h1>
+          <h1 className="text-2xl font-bold">Mẫu nội dung</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Quan ly template cho bai viet AI
+            Quản lý template cho bài viết AI
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)} className="gap-2">
           <Plus className="size-4" />
-          Tao mau
+          Tao mẫu
         </Button>
       </div>
 
@@ -274,7 +274,7 @@ export default function TemplatesPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Tim mau..."
+                placeholder="Tìm mẫu..."
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -285,11 +285,11 @@ export default function TemplatesPage() {
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
             >
-              <option value="all">Tat ca loai</option>
+              <option value="all">Tất cả loại</option>
               <option value="facebook">Facebook</option>
               <option value="website">Website</option>
               <option value="video">Video</option>
-              <option value="image">Anh</option>
+              <option value="image">ảnh</option>
             </select>
             <Button variant="outline" size="icon" onClick={fetchTemplates}>
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -308,19 +308,19 @@ export default function TemplatesPage() {
           ) : filteredTemplates.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 gap-2 text-muted-foreground">
               <FileCode className="size-8" />
-              <p className="text-sm">Chua co template nao</p>
-              <Button size="sm" onClick={() => setCreateOpen(true)}>Tao template dau tien</Button>
+              <p className="text-sm">Chưa có template nào</p>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>Tạo template đầu tiên</Button>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Ten</TableHead>
-                  <TableHead>Loai</TableHead>
-                  <TableHead>Bien</TableHead>
-                  <TableHead>Su dung</TableHead>
-                  <TableHead>Ngay tao</TableHead>
-                  <TableHead className="text-right">Thao tac</TableHead>
+                  <TableHead>Tên</TableHead>
+                  <TableHead>Loại</TableHead>
+                  <TableHead>Biến</TableHead>
+                  <TableHead>Sử dụng</TableHead>
+                  <TableHead>Ngày tạo</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -374,10 +374,10 @@ export default function TemplatesPage() {
                               <Copy className="mr-2 size-4" />Copy
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEdit(tmpl)}>
-                              <Pencil className="mr-2 size-4" />Sua
+                              <Pencil className="mr-2 size-4" />Sửa
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(tmpl)}>
-                              <Trash2 className="mr-2 size-4" />Xoa
+                              <Trash2 className="mr-2 size-4" />Xóa
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -411,7 +411,7 @@ export default function TemplatesPage() {
                 </div>
               )}
               <div>
-                <p className="text-sm font-medium mb-2">Bien ({viewTemplate.variables.length}):</p>
+                <p className="text-sm font-medium mb-2">Biến ({viewTemplate.variables.length}):</p>
                 <div className="flex gap-2 flex-wrap">
                   {viewTemplate.variables.map((v) => (
                     <Badge key={v} variant="outline">{`{${v}}`}</Badge>
@@ -427,7 +427,7 @@ export default function TemplatesPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewTemplate(null)}>Dong</Button>
+            <Button variant="outline" onClick={() => setViewTemplate(null)}>Đóng</Button>
             <Button onClick={() => viewTemplate && handleCopy(viewTemplate)}>
               <Copy className="mr-2 size-4" />Copy
             </Button>
@@ -447,23 +447,23 @@ export default function TemplatesPage() {
       >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editTemplate ? "Sua template" : "Tao mau noi dung moi"}</DialogTitle>
+            <DialogTitle>{editTemplate ? "Sửa template" : "Tạo mẫu nội dung mới"}</DialogTitle>
             <DialogDescription>
-              Tao template de tai su dung cho viec tao noi dung AI
+              Tạo template để tái sử dụng cho việc tạo nội dung AI
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Ten mau *</label>
+                <label className="text-sm font-medium">Tên mẫu *</label>
                 <Input
                   value={form.template_name}
                   onChange={(e) => setForm((f) => ({ ...f, template_name: e.target.value }))}
-                  placeholder="VD: Bai viet Facebook Sales"
+                  placeholder="VD: Bài viết Facebook Sales"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Loai noi dung *</label>
+                <label className="text-sm font-medium">Loại nội dung *</label>
                 <select
                   className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
                   value={form.content_type}
@@ -472,7 +472,7 @@ export default function TemplatesPage() {
                   <option value="facebook">Facebook</option>
                   <option value="website">Website</option>
                   <option value="video">Video</option>
-                  <option value="image">Anh</option>
+                  <option value="image">Ảnh</option>
                 </select>
               </div>
             </div>
@@ -481,7 +481,7 @@ export default function TemplatesPage() {
               <Textarea
                 value={form.system_prompt}
                 onChange={(e) => setForm((f) => ({ ...f, system_prompt: e.target.value }))}
-                placeholder="Huong dan cho AI ve cach viet noi dung nay..."
+                placeholder="Hướng dẫn cho AI về cách viết nội dung này..."
                 className="min-h-[80px]"
               />
             </div>
@@ -491,15 +491,15 @@ export default function TemplatesPage() {
                 value={form.user_template}
                 onChange={(e) => setForm((f) => ({ ...f, user_template: e.target.value }))}
                 className="min-h-[200px] font-mono text-sm"
-                placeholder={'{{product_name}}\n\n{{product_highlights}}\n\nGia: {{price}}\n\n{{cta}}'}
+                placeholder={'{{product_name}}\n\n{{product_highlights}}\n\nGiá: {{price}}\n\n{{cta}}'}
               />
               <p className="text-xs text-muted-foreground">
-                Su dung {"{TEN_BIEN}"} de danh dau bien thay the
+                Sử dụng {"{TEN_BIEN}"} để đánh dấu biến thay thế
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Bien (cach nhau dau phay)</label>
+                <label className="text-sm font-medium">Biến (cách nhau dấu phẩy)</label>
                 <Input
                   value={form.variables}
                   onChange={(e) => setForm((f) => ({ ...f, variables: e.target.value }))}
@@ -507,11 +507,11 @@ export default function TemplatesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Giong van (cach nhau dau phay)</label>
+                <label className="text-sm font-medium">Giọng văn (cách nhau dấu phẩy)</label>
                 <Input
                   value={form.tone_options}
                   onChange={(e) => setForm((f) => ({ ...f, tone_options: e.target.value }))}
-                  placeholder="chuyen nghiep, than thien"
+                  placeholder="chuyên nghiệp, thân thiện"
                 />
               </div>
             </div>
@@ -522,7 +522,7 @@ export default function TemplatesPage() {
             </Button>
             <Button onClick={editTemplate ? handleSaveEdit : handleSaveCreate} disabled={saving}>
               {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              {editTemplate ? "Luu thay doi" : "Tao mau"}
+              {editTemplate ? "Lưu thay đổi" : "Tạo mẫu"}
             </Button>
           </DialogFooter>
         </DialogContent>

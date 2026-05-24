@@ -9,22 +9,7 @@
 
 import { Pool } from "pg";
 
-const DATABASE_URL = process.env.DATABASE_URL;
-
-if (!DATABASE_URL) {
-  console.error(
-    "[ERROR] DATABASE_URL chua duoc cau hinh.\n" +
-    "Vui long tao file .env.local trong thu muc admin-ui:\n" +
-    "  DATABASE_URL=postgres://user:password@host:5433/mtl_medusa\n" +
-    "Hoac dat bien moi truong truoc khi chay:\n" +
-    "  Windows (cmd): set DATABASE_URL=postgres://...\n" +
-    "  Windows (ps):  $env:DATABASE_URL='postgres://...'\n" +
-    "  macOS/Linux:   export DATABASE_URL=postgres://..."
-  );
-  process.exit(1);
-}
-
-const pool = new Pool({ connectionString: DATABASE_URL });
+const DATABASE_URL = process.env.DATABASE_URL ?? "";
 
 async function ensureIndex(client: any, idxName: string, idxDef: string) {
   const check = await client.query(
@@ -37,6 +22,14 @@ async function ensureIndex(client: any, idxName: string, idxDef: string) {
 }
 
 async function migrate() {
+  if (!DATABASE_URL) {
+    console.error(
+      "[ERROR] DATABASE_URL chưa được cấu hình.\n" +
+      "Vui lòng đặt biến môi trường DATABASE_URL trước khi chạy."
+    );
+    process.exit(1);
+  }
+  const pool = new Pool({ connectionString: DATABASE_URL });
   const client = await pool.connect();
   console.log("=== Content Module Migration ===");
   console.log("Database:", DATABASE_URL.split("@")[1] || "local");
@@ -257,33 +250,33 @@ async function migrate() {
         (template_name, content_type, system_prompt, user_template, variables, tone_options)
        VALUES
         (
-          'Bai viet Facebook - Gioi thieu san pham',
+          'Bài viết Facebook - Giới thiệu sản phẩm',
           'facebook',
-          'Ban la chuyen gia marketing laptop voi 10 nam kinh nghiem. Viet bai Facebook hap dan, thu hut nguoi doc, kem emoji phu hop. Khong viet qua dai (200-400 tu).',
-          '{{product_name}}\n\n{{product_highlights}}\n\nGia: {{price}}\n\n{{cta}}',
+          'Bạn là chuyên gia marketing laptop với 10 năm kinh nghiệm. Viết bài Facebook hấp dẫn, thu hút người đọc, kèm emoji phù hợp. Không viết quá dài (200-400 từ).',
+          '{{product_name}}\n\n{{product_highlights}}\n\nGiá: {{price}}\n\n{{cta}}',
           '["product_name","product_highlights","price","cta"]',
-          '["chuyen nghiep","than thien","hai huoc","nghiem tuc"]'
+          '["chuyên nghiệp","thân thiện","hài hước","nghiêm túc"]'
         ),
         (
-          'Bai viet Website - Danh gia chi tiet',
+          'Bài viết Website - Đánh giá chi tiết',
           'website',
-          'Ban la content writer chuyen nghiep. Viet bai SEO voi cau truc ro rang: gioi thieu, dac diem noi bat, danh gia, ket luan. Su dung heading H2/H3. Tu khoa tu nhien.',
-          'Tieu de SEO: {{seo_title}}\n\nGioi thieu: {{intro}}\n\nDac diem noi bat: {{highlights}}\n\nThong so ky thuat: {{specs}}\n\nDanh gia: {{review}}\n\nKet luan: {{conclusion}}',
+          'Bạn là content writer chuyên nghiệp. Viết bài SEO với cấu trúc rõ ràng: giới thiệu, đặc điểm nổi bật, đánh giá, kết luận. Sử dụng heading H2/H3. Từ khóa tự nhiên.',
+          'Tiêu đề SEO: {{seo_title}}\n\nGiới thiệu: {{intro}}\n\nĐặc điểm nổi bật: {{highlights}}\n\nThông số kỹ thuật: {{specs}}\n\nĐánh giá: {{review}}\n\nKết luận: {{conclusion}}',
           '["seo_title","intro","highlights","specs","review","conclusion"]',
-          '["chuyen nghiep","de doc","chi tiet"]'
+          '["chuyên nghiệp","dễ đọc","chi tiết"]'
         ),
         (
-          'Kich ban Video ngan',
+          'Kịch bản Video ngắn',
           'video',
-          'Ban la chuyen gia san xuat noi dung video TikTok/YouTube Shorts. Viet kich ban ngan gon, co hook manh, tempo nhanh, phu hop platform {{platform}}.',
-          'Hook (3s): {{hook}}\n\nMo dau (5s): {{opening}}\n\nNoi dung chinh (30s): {{main_content}}\n\nCTA (5s): {{cta}}',
+          'Bạn là chuyên gia sản xuất nội dung video TikTok/YouTube Shorts. Viết kịch bản ngắn gọn, có hook mạnh, tempo nhanh, phù hợp platform {{platform}}.',
+          'Hook (3s): {{hook}}\n\nMở đầu (5s): {{opening}}\n\nNội dung chính (30s): {{main_content}}\n\nCTA (5s): {{cta}}',
           '["platform","hook","opening","main_content","cta"]',
-          '["nang dong","chuyen nghiep","vui non","kich tinh"]'
+          '["năng động","chuyên nghiệp","vui vẻ","kịch tính"]'
         ),
         (
-          'Prompt tao anh san pham',
+          'Prompt tạo ảnh sản phẩm',
           'image',
-          'Ban la chuyen gia prompt cho AI tao anh. Viet prompt chi tiet, mo ta ro chu the, boi canh, anh sang, phong cach, mau sac.',
+          'Bạn là chuyên gia prompt cho AI tạo ảnh. Viết prompt chi tiết, mô tả rõ chủ thể, bối cảnh, ánh sáng, phong cách, màu sắc.',
           '{{subject}} on {{background}}, {{lighting}} lighting, {{style}} style, product photography, high quality, 4k',
           '["subject","background","lighting","style"]',
           '["minimalist","vibrant","dark moody","bright clean"]'
@@ -303,10 +296,10 @@ async function migrate() {
     console.log("  [OK] Seed: ai_settings (default OpenAI)");
 
     await client.query("COMMIT");
-    console.log("\n[MIGRATION] Da tao 9 bang + seed data. Thanh cong!");
+    console.log("\n[MIGRATION] Đã tạo 9 bảng + seed data. Thành công!");
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("\n[MIGRATION] That bai:", err);
+    console.error("\n[MIGRATION] Thất bại:", err);
     throw err;
   } finally {
     client.release();
@@ -315,6 +308,11 @@ async function migrate() {
 }
 
 async function rollback() {
+  if (!DATABASE_URL) {
+    console.error("[ERROR] DATABASE_URL chưa được cấu hình.");
+    process.exit(1);
+  }
+  const pool = new Pool({ connectionString: DATABASE_URL });
   const client = await pool.connect();
   console.log("=== Rollback Content Module ===");
   try {
@@ -329,10 +327,10 @@ async function rollback() {
     await client.query("DROP TABLE IF EXISTS ai_settings CASCADE");
     await client.query("DROP TABLE IF EXISTS ai_providers CASCADE");
     await client.query("COMMIT");
-    console.log("[ROLLBACK] Thanh cong!");
+    console.log("[ROLLBACK] Thành công!");
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("[ROLLBACK] That bai:", err);
+    console.error("[ROLLBACK] Thất bại:", err);
   } finally {
     client.release();
     await pool.end();

@@ -49,9 +49,9 @@ type VideoScript = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "success" | "warning" | "secondary" }> = {
-  published: { label: "Da dang", variant: "success" },
-  scheduled: { label: "Da len lich", variant: "warning" },
-  draft: { label: "Nhap", variant: "secondary" },
+  published: { label: "Đã đăng", variant: "success" },
+  scheduled: { label: "Đã lên lịch", variant: "warning" },
+  draft: { label: "Nháp", variant: "secondary" },
 };
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
@@ -79,7 +79,7 @@ export default function VideoScriptsPage() {
         setScripts(result.data || []);
       }
     } catch {
-      toast.error("Loi khi lay danh sach");
+      toast.error("Lỗi khi lấy danh sách");
     } finally {
       setLoading(false);
     }
@@ -94,15 +94,15 @@ export default function VideoScriptsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Kich ban video</h1>
+          <h1 className="text-2xl font-bold">Kịch bản video</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Quan ly kich ban video TikTok, Reels, YouTube Shorts
+            Quản lý kịch bản video TikTok, Reels, YouTube Shorts
           </p>
         </div>
         <Button asChild className="gap-2">
           <a href="/content/ai-generator">
             <Plus className="size-4" />
-            Tao kich ban
+            Tạo kịch bản
           </a>
         </Button>
       </div>
@@ -114,7 +114,7 @@ export default function VideoScriptsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Tim kich ban, san pham..."
+                placeholder="Tìm kịch bản, sản phẩm..."
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -122,10 +122,10 @@ export default function VideoScriptsPage() {
             </div>
             <select className="h-10 px-3 rounded-md border border-input bg-background text-sm"
               value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">Tat ca trang thai</option>
-              <option value="draft">Nhap</option>
-              <option value="scheduled">Da len lich</option>
-              <option value="published">Da dang</option>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="draft">Nháp</option>
+              <option value="scheduled">Đã lên lịch</option>
+              <option value="published">Đã đăng</option>
             </select>
             <Button variant="outline" size="icon" onClick={fetchScripts}>
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -140,10 +140,10 @@ export default function VideoScriptsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Kich ban</TableHead>
-                <TableHead>San pham</TableHead>
-                <TableHead>Trang thai</TableHead>
-                <TableHead className="w-[160px]">Ngay tao</TableHead>
+                  <TableHead>Kịch bản</TableHead>
+                  <TableHead>Sản phẩm</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="w-[160px]">Ngày tạo</TableHead>
                 <TableHead className="w-[80px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -157,7 +157,7 @@ export default function VideoScriptsPage() {
               ) : scripts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Khong co kich ban nao
+                    Không có kịch bản nào
                   </TableCell>
                 </TableRow>
               ) : (
@@ -172,7 +172,7 @@ export default function VideoScriptsPage() {
                       <TableCell>
                         <div className="min-w-0">
                           <p className="font-medium text-sm truncate max-w-[250px]">
-                            {script.title || "(Khong co tieu de)"}
+                            {script.title || "(Không có tiêu đề)"}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {platformCfg.label}
@@ -212,10 +212,10 @@ export default function VideoScriptsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Video className="size-5 text-red-600" />
-              {viewScript?.title || "Kich ban video"}
+              {viewScript?.title || "Kịch bản video"}
             </DialogTitle>
             <DialogDescription>
-              {viewScript?.product_name && `San pham: ${viewScript.product_name}`}
+              {viewScript?.product_name && `Sản phẩm: ${viewScript.product_name}`}
             </DialogDescription>
           </DialogHeader>
           {viewScript && (
@@ -227,16 +227,16 @@ export default function VideoScriptsPage() {
                 {viewScript.generated_by && <Badge>AI: {viewScript.generated_by}</Badge>}
               </div>
               <div className="bg-muted/50 rounded-lg p-4 whitespace-pre-wrap text-sm max-h-[400px] overflow-y-auto font-mono">
-                {viewScript.content_body || "(Khong co noi dung)"}
+                {viewScript.content_body || "(Không có nội dung)"}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewScript(null)}>Dong</Button>
+            <Button variant="outline" onClick={() => setViewScript(null)}>Đóng</Button>
             <Button onClick={() => {
               if (viewScript?.content_body) {
                 navigator.clipboard.writeText(viewScript.content_body);
-                toast.success("Da copy kich ban!");
+                toast.success("Đã copy kịch bản!");
               }
             }}>
               <Copy className="mr-2 size-4" />Copy

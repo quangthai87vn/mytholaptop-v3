@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Bật standalone để Docker build hoạt động đúng
+  output: "standalone",
+
   // Cho phép truy cập HMR từ các thiết bị cùng mạng LAN (điện thoại, tablet test)
   allowedDevOrigins: ["192.168.1.59", "localhost"],
 

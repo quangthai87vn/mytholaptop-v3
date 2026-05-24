@@ -91,7 +91,7 @@ async function authenticateWithMedusa(
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, scope: "admin" }),
       });
 
       if (response.ok) {
@@ -273,7 +273,7 @@ async function proxyRequest(
       const isJwtFormat = authToken && authToken.split(".").length === 3;
       return NextResponse.json(
         {
-          error: `Lỗi xác thực Medusa (HTTP ${response.status}): ${errorDetail}`,
+          error: "Lỗi xác thực Medusa (HTTP ${response.status}): ${errorDetail}",
           code: "AUTH_FAILED",
           hint: isJwtFormat
             ? "Token JWT hợp lệ nhưng bị từ chối. Kiểm tra Medusa backend đang chạy và API key còn hiệu lực."

@@ -5,10 +5,12 @@
 
 import { createAIProvider } from "./providers";
 import { getSettings } from "../db/settings";
+import { getActiveBrandVoice } from "../db/brand-voices";
 import { getTemplateById, incrementTemplateUsage } from "../db/templates";
 import { createContentItem, updateContentItem } from "../db/content";
 import { createGenerationLog } from "../db/logs";
 import type { AIProviderType, ContentType, AISettingsOutput } from "../types";
+import type { BrandVoice } from "@/types/ai-operating";
 
 export interface GenerateContentParams {
   product: {
@@ -83,17 +85,83 @@ const AUDIENCE_INSTRUCTIONS: Record<string, string> = {
     "Hướng đến creative professional - nhấn mạnh màu sắc, độ phân giải, stylus support.",
 };
 
+// Map brand voice preset tone sliders to instruction strings
+function brandVoiceToneInstructions(voice: BrandVoice | null): string {
+  if (!voice) return "";
+
+  const parts: string[] = [];
+
+  // Professional ↔ Casual slider (-1 = professional, 1 = casual)
+  if (voice.tone_professional_casual !== undefined) {
+    if (voice.tone_professional_casual <= -0.5) {
+      parts.push("Giọng văn chuyên nghiệp, trang trọng, dùng thuật ngữ kỹ thuật chính xác.");
+    } else if (voice.tone_professional_casual >= 0.5) {
+      parts.push("Giọng văn thân thiện, gần gũi, dễ hiểu, phù hợp mọi đối tượng.");
+    } else {
+      parts.push("Giọng văn cân bằng giữa chuyên nghiệp và thân thiện.");
+    }
+  }
+
+  // Luxury ↔ Affordable slider
+  if (voice.tone_luxury_affordable !== undefined) {
+    if (voice.tone_luxury_affordable <= -0.5) {
+      parts.push("Nhấn mạnh giá trị cao cấp, sang trọng, đẳng cấp.");
+    } else if (voice.tone_luxury_affordable >= 0.5) {
+      parts.push("Nhấn mạnh giá trị hợp lý, tiết kiệm, chất lượng tốt.");
+    }
+  }
+
+  // Technical ↔ Simple slider
+  if (voice.tone_technical_simple !== undefined) {
+    if (voice.tone_technical_simple <= -0.5) {
+      parts.push("Dùng thuật ngữ kỹ thuật chi tiết, phân tích chuyên sâu.");
+    } else if (voice.tone_technical_simple >= 0.5) {
+      parts.push("Dùng ngôn ngữ đơn giản, dễ hiểu cho người không chuyên.");
+    }
+  }
+
+  // Emoji usage
+  if (voice.emoji_usage === "none") {
+    parts.push("Không dùng emoji.");
+  } else if (voice.emoji_usage === "minimal") {
+    parts.push("Dùng ít emoji (1-2 emoji mỗi đoạn).");
+  } else if (voice.emoji_usage === "heavy") {
+    parts.push("Dùng nhiều emoji (3-5+) để tăng tính hấp dẫn.");
+  }
+
+  // CTA style
+  if (voice.cta_style === "urgency") {
+    parts.push("CTA: tạo cảm giác khẩn cấp, khan hiếm.");
+  } else if (voice.cta_style === "friendly") {
+    parts.push("CTA: thân thiện, mời gọi nhẹ nhàng.");
+  } else if (voice.cta_style === "soft") {
+    parts.push("CTA: mềm nhẹ, gợi ý không ép buộc.");
+  } else {
+    parts.push("CTA: rõ ràng, trực tiếp.");
+  }
+
+  // Content template override
+  if (voice.content_template) {
+    parts.push(`Quy tắc nội dung: ${voice.content_template}`);
+  }
+
+  return parts.join("\n");
+}
+
 function buildSystemPrompt(
   settings: AISettingsOutput,
   tone: string,
-  audience: string
+  audience: string,
+  brandVoice: BrandVoice | null
 ): string {
   const toneNote = TONE_INSTRUCTIONS[tone] || `Giọng văn: ${tone}`;
   const audienceNote = AUDIENCE_INSTRUCTIONS[audience] || `Đối tượng: ${audience}`;
+  const brandNote = brandVoiceToneInstructions(brandVoice);
 
   const parts = [
     settings.brand_voice || "Bạn là chuyên gia marketing laptop và công nghệ.",
     settings.prompt_rules || "",
+    brandNote,
     toneNote,
     audienceNote,
     settings.safety_rules || "KHÔNG viết nội dung nhạy cảm, phân biệt đối xử.",
@@ -174,7 +242,7 @@ export async function generateContent(
       return { success: false, error: "Cau hinh AI chua day du. Vui long kiem tra base_url va api_key." };
     }
 
-    // 2. Load template if provided
+    // 2. Load template & active brand voice in parallel
     let template = params.template;
     if (params.templateId && !template) {
       const t = await getTemplateById(params.templateId);
@@ -183,9 +251,12 @@ export async function generateContent(
       }
     }
 
+    // Load active brand voice
+    const activeBrandVoice = await getActiveBrandVoice();
+
     // 3. Build prompt
     const systemPrompt = template?.system_prompt
-      || buildSystemPrompt(settings, params.tone || "", params.audience || "");
+      || buildSystemPrompt(settings, params.tone || "", params.audience || "", activeBrandVoice);
     const userPrompt = buildUserPrompt(
       params.product,
       template,

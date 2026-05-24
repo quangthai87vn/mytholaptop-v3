@@ -9,6 +9,13 @@ import {
   Loader2,
   XCircle,
   FolderOpen,
+  Pencil,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  PlusCircle,
+  FolderSearch,
+  Info,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,7 +35,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CategoryTree, type CategoryNode } from "@/components/categories/category-tree";
 import { CategoryTreeMobile } from "@/components/categories/category-tree-mobile";
 import {
@@ -93,19 +110,11 @@ function filterTree(
       const hasMatchingDescendant = filteredChildren.length > 0;
 
       if (matchesSearch && matchesStatus) {
-        return {
-          ...node,
-          children: filteredChildren,
-        };
+        return { ...node, children: filteredChildren };
       }
-
       if (hasMatchingDescendant) {
-        return {
-          ...node,
-          children: filteredChildren,
-        };
+        return { ...node, children: filteredChildren };
       }
-
       return null;
     })
     .filter((n): n is CategoryNode => n !== null);
@@ -126,19 +135,37 @@ function generateHandle(name: string): string {
     .trim();
 }
 
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function CategoriesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<CategoryNode | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [addChildMode, setAddChildMode] = useState(false);
 
+  // Form state
   const [formName, setFormName] = useState("");
   const [formHandle, setFormHandle] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formParent, setFormParent] = useState("none");
   const [formActive, setFormActive] = useState(true);
+  const [formRank, setFormRank] = useState<number | undefined>(undefined);
+  const [formThumbnail, setFormThumbnail] = useState("");
+  const [formSeoTitle, setFormSeoTitle] = useState("");
+  const [formSeoDesc, setFormSeoDesc] = useState("");
+  const [autoHandle, setAutoHandle] = useState(true);
 
   const { data, isLoading, isError, error, refetch } = useCategories({
     limit: 1000,
@@ -155,10 +182,7 @@ export default function CategoriesPage() {
     [categoryTree, search, statusFilter]
   );
 
-  const totalDisplayed = useMemo(
-    () => countNodes(filteredTree),
-    [filteredTree]
-  );
+  const totalDisplayed = useMemo(() => countNodes(filteredTree), [filteredTree]);
 
   const allFlat = useMemo(() => {
     const result: CategoryNode[] = [];
@@ -176,32 +200,65 @@ export default function CategoriesPage() {
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
 
-  const getParentName = (node: CategoryNode): string => {
-    if (!node.parent_category_id) return "—";
-    const parent = allFlat.find((c) => c.id === node.parent_category_id);
-    return parent?.name || "—";
+  const handleNameChange = (name: string) => {
+    setFormName(name);
+    if (autoHandle && !isEditing) {
+      setFormHandle(generateHandle(name));
+    }
   };
 
-  const openAddDialog = () => {
+  const openAddDialog = (parentId?: string) => {
     setSelectedCategory(null);
     setIsEditing(false);
+    setAddChildMode(!!parentId);
     setFormName("");
     setFormHandle("");
     setFormDescription("");
-    setFormParent("none");
+    setFormParent(parentId && parentId !== "none" ? parentId : "none");
     setFormActive(true);
-    setEditDialogOpen(true);
+    setFormRank(undefined);
+    setFormThumbnail("");
+    setFormSeoTitle("");
+    setFormSeoDesc("");
+    setAutoHandle(true);
+    setDrawerOpen(true);
   };
 
   const openEditDialog = (cat: CategoryNode) => {
     setSelectedCategory(cat);
     setIsEditing(true);
+    setAddChildMode(false);
     setFormName(cat.name);
-    setFormHandle(cat.handle);
-    setFormDescription(cat.description);
+    setFormHandle(cat.handle || "");
+    setFormDescription(cat.description || "");
+
+    // Load metadata from flat list
+    const catData = data?.data?.product_categories?.find((c) => c.id === cat.id);
+    const meta = catData?.metadata;
+    setFormRank(
+      meta && typeof meta === "object" && "rank" in meta
+        ? Number((meta as Record<string, unknown>).rank) || undefined
+        : catData?.rank
+    );
+    setFormThumbnail(
+      meta && typeof meta === "object" && "thumbnail" in meta
+        ? String((meta as Record<string, unknown>).thumbnail || "")
+        : ""
+    );
+    setFormSeoTitle(
+      meta && typeof meta === "object" && "seo_title" in meta
+        ? String((meta as Record<string, unknown>).seo_title || "")
+        : ""
+    );
+    setFormSeoDesc(
+      meta && typeof meta === "object" && "seo_description" in meta
+        ? String((meta as Record<string, unknown>).seo_description || "")
+        : ""
+    );
     setFormParent(cat.parent_category_id || "none");
     setFormActive(cat.is_active);
-    setEditDialogOpen(true);
+    setAutoHandle(false);
+    setDrawerOpen(true);
   };
 
   const openDeleteDialog = (cat: CategoryNode) => {
@@ -209,21 +266,32 @@ export default function CategoriesPage() {
     setDeleteDialogOpen(true);
   };
 
-  const handleNameChange = (name: string) => {
-    setFormName(name);
-    if (!isEditing) {
-      setFormHandle(generateHandle(name));
-    }
+  const handleDrawerClose = () => {
+    setDrawerOpen(false);
+    setSelectedCategory(null);
+    setIsEditing(false);
+    setAddChildMode(false);
   };
 
   const handleSave = async () => {
     if (!formName.trim()) return;
+
+    const parentCat = formParent !== "none" ? allFlat.find((c) => c.id === formParent) : null;
+    const seoTitle = formSeoTitle.trim() || formName;
+    const seoDesc = formSeoDesc.trim() || formDescription;
 
     const payload: Record<string, unknown> = {
       name: formName,
       handle: formHandle || generateHandle(formName),
       description: formDescription,
       is_active: formActive,
+      rank: formRank ?? 0,
+      metadata: {
+        thumbnail: formThumbnail,
+        seo_title: seoTitle,
+        seo_description: seoDesc,
+        source: "manual",
+      },
     };
 
     if (formParent !== "none") {
@@ -237,8 +305,8 @@ export default function CategoriesPage() {
           category: payload as any,
         });
         if (result.success) {
-          toast.success("�ã cập nhật danh mục");
-          setEditDialogOpen(false);
+          toast.success("Đã cập nhật danh mục");
+          handleDrawerClose();
           refetch();
         } else {
           toast.error(`Lỗi: ${result.error}`);
@@ -247,7 +315,7 @@ export default function CategoriesPage() {
         const result = await createCategory.mutateAsync(payload as any);
         if (result.success) {
           toast.success("Đã tạo danh mục");
-          setEditDialogOpen(false);
+          handleDrawerClose();
           refetch();
         } else {
           toast.error(`Lỗi: ${result.error}`);
@@ -263,7 +331,7 @@ export default function CategoriesPage() {
     try {
       const result = await deleteCategory.mutateAsync(selectedCategory.id);
       if (result.success) {
-        toast.success("�ã xoá danh mục");
+        toast.success("Đã xoá danh mục");
         setDeleteDialogOpen(false);
         refetch();
       } else {
@@ -278,6 +346,12 @@ export default function CategoriesPage() {
     (c) => !selectedCategory || c.id !== selectedCategory.id
   );
 
+  const catData = selectedCategory
+    ? data?.data?.product_categories?.find((c) => c.id === selectedCategory.id)
+    : null;
+
+  const isSaving = createCategory.isPending || updateCategory.isPending;
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -290,10 +364,51 @@ export default function CategoriesPage() {
             Quản lý danh mục sản phẩm trong cửa hàng.
           </p>
         </div>
-        <Button onClick={openAddDialog}>
+        <Button onClick={() => openAddDialog()}>
           <Plus className="mr-2 size-4" />
           Thêm danh mục
         </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="flex items-center gap-3 pt-6">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+              <FolderOpen className="size-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{allFlat.length}</p>
+              <p className="text-sm text-muted-foreground">Tổng danh mục</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 pt-6">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-green-100 text-green-600">
+              <FolderOpen className="size-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {allFlat.filter((c) => c.is_active).length}
+              </p>
+              <p className="text-sm text-muted-foreground">Đang hoạt động</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 pt-6">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-red-100 text-red-600">
+              <FolderOpen className="size-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {allFlat.filter((c) => !c.is_active).length}
+              </p>
+              <p className="text-sm text-muted-foreground">Không hoạt động</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -319,7 +434,7 @@ export default function CategoriesPage() {
                 <SelectItem value="inactive">Không hoạt động</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="ghost" size="icon" onClick={() => refetch()} className="size-10">
+            <Button variant="outline" size="icon" onClick={() => refetch()} className="size-10">
               <RefreshCw className="size-4" />
             </Button>
           </div>
@@ -369,16 +484,23 @@ export default function CategoriesPage() {
             {totalDisplayed === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <XCircle className="size-12 mb-3" />
-                <p>Không tìm thấy danh mục nào.</p>
+                <p className="text-base font-medium mb-1">Không tìm thấy danh mục nào</p>
+                <p className="text-sm mb-4">Tạo danh mục đầu tiên để bắt đầu.</p>
+                <Button size="sm" onClick={() => openAddDialog()}>
+                  <Plus className="size-4 mr-2" />
+                  Thêm danh mục
+                </Button>
               </div>
             ) : (
               <div className="divide-y">
                 {/* Desktop Tree */}
                 <div className="hidden md:block overflow-x-auto">
-                  <CategoryTree
+                  <EnhancedCategoryTree
                     nodes={filteredTree}
                     onEdit={openEditDialog}
                     onDelete={openDeleteDialog}
+                    onAddChild={openAddDialog}
+                    allFlat={allFlat}
                   />
                 </div>
 
@@ -396,77 +518,211 @@ export default function CategoriesPage() {
         </Card>
       )}
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {isEditing ? "Sửa danh mục" : "Thêm danh mục mới"}
-            </DialogTitle>
-            <DialogDescription>
+      {/* Create / Edit Drawer */}
+      <Sheet open={drawerOpen} onOpenChange={(open) => !open && handleDrawerClose()}>
+        <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              {isEditing
+                ? "Sửa danh mục"
+                : addChildMode
+                ? "Thêm danh mục con"
+                : "Thêm danh mục mới"}
+            </SheetTitle>
+            <SheetDescription>
               {isEditing
                 ? "Cập nhật thông tin danh mục."
                 : "Tạo một danh mục sản phẩm mới."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-5 py-4">
+            {/* Name */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tên danh mục</label>
+              <Label htmlFor="cat-name">
+                Tên danh mục <span className="text-destructive">*</span>
+              </Label>
               <Input
+                id="cat-name"
                 placeholder="Nhập tên danh mục..."
                 value={formName}
                 onChange={(e) => handleNameChange(e.target.value)}
               />
             </div>
+
+            {/* Handle */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Slug</label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="cat-handle">Slug</Label>
+                {!autoHandle && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setFormHandle(generateHandle(formName));
+                      setAutoHandle(true);
+                    }}
+                  >
+                    Tự sinh
+                  </Button>
+                )}
+              </div>
               <Input
+                id="cat-handle"
                 placeholder="slug-danh-muc"
                 value={formHandle}
-                onChange={(e) => setFormHandle(e.target.value)}
+                onChange={(e) => {
+                  setFormHandle(e.target.value.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-"));
+                  setAutoHandle(false);
+                }}
               />
             </div>
+
+            {/* Parent */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Danh mục cha</label>
+              <Label htmlFor="cat-parent">Danh mục cha</Label>
               <Select value={formParent} onValueChange={setFormParent}>
-                <SelectTrigger>
+                <SelectTrigger id="cat-parent">
                   <SelectValue placeholder="Chọn danh mục cha (không bắt buộc)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Không có (Danh mục gốc)</SelectItem>
                   {parentOptions.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
-                      {cat.level > 0
-                        ? `${"  ".repeat(cat.level)}${cat.name}`
-                        : cat.name}
+                      {cat.level > 0 ? `${"  ".repeat(cat.level)}${cat.name}` : cat.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Description */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Mô tả</label>
+              <Label htmlFor="cat-desc">Mô tả</Label>
               <Textarea
+                id="cat-desc"
                 placeholder="Mô tả danh mục..."
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
                 rows={3}
               />
             </div>
+
+            {/* Thumbnail */}
+            <div className="space-y-2">
+              <Label htmlFor="cat-thumb">Ảnh đại diện (URL)</Label>
+              <Input
+                id="cat-thumb"
+                placeholder="https://example.com/category-image.jpg"
+                value={formThumbnail}
+                onChange={(e) => setFormThumbnail(e.target.value)}
+              />
+              {formThumbnail && (
+                <div className="relative w-24 h-16 rounded border overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={formThumbnail}
+                    alt="Thumbnail preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Rank */}
+            <div className="space-y-2">
+              <Label htmlFor="cat-rank">Thứ tự hiển thị</Label>
+              <Input
+                id="cat-rank"
+                type="number"
+                min={0}
+                placeholder="0"
+                value={formRank ?? ""}
+                onChange={(e) =>
+                  setFormRank(e.target.value ? Number(e.target.value) : undefined)
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Số nhỏ hơn sẽ hiển thị trước.
+              </p>
+            </div>
+
+            {/* Active */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="cat-active">Trạng thái</Label>
+                <p className="text-xs text-muted-foreground">
+                  Danh mục không hoạt động sẽ không hiển thị trên cửa hàng.
+                </p>
+              </div>
+              <Switch
+                id="cat-active"
+                checked={formActive}
+                onCheckedChange={setFormActive}
+              />
+            </div>
+
+            {/* SEO Section */}
+            <div className="space-y-3 border-t pt-4">
+              <h3 className="text-sm font-semibold">SEO</h3>
+              <div className="space-y-2">
+                <Label htmlFor="cat-seo-title">Tiêu đề SEO</Label>
+                <Input
+                  id="cat-seo-title"
+                  placeholder={formName || "Tiêu đề danh mục..."}
+                  value={formSeoTitle}
+                  onChange={(e) => setFormSeoTitle(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Để trống để dùng tên danh mục. Khuyến nghị 50-60 ký tự.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cat-seo-desc">Mô tả SEO</Label>
+                <Textarea
+                  id="cat-seo-desc"
+                  placeholder={formDescription || "Mô tả cho công cụ tìm kiếm..."}
+                  value={formSeoDesc}
+                  onChange={(e) => setFormSeoDesc(e.target.value)}
+                  rows={2}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Để trống để dùng mô tả. Khuyến nghị 120-160 ký tự.
+                </p>
+              </div>
+            </div>
+
+            {/* Metadata info */}
+            {isEditing && catData && (
+              <div className="rounded-md bg-muted/50 p-3 space-y-1.5">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Info className="size-3" />
+                  ID: <code className="text-[10px]">{catData.id}</code>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Tạo: {formatDate(catData.created_at)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Cập nhật: {formatDate(catData.updated_at)}
+                </div>
+              </div>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+
+          <div className="flex gap-2 pt-2 border-t">
+            <Button variant="outline" onClick={handleDrawerClose} className="flex-1">
               Huỷ
             </Button>
             <Button
               onClick={handleSave}
-              disabled={
-                !formName.trim() ||
-                createCategory.isPending ||
-                updateCategory.isPending
-              }
+              disabled={!formName.trim() || isSaving}
+              className="flex-1"
             >
-              {createCategory.isPending || updateCategory.isPending ? (
+              {isSaving ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : isEditing ? (
                 "Cập nhật"
@@ -474,9 +730,9 @@ export default function CategoriesPage() {
                 "Tạo mới"
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -485,6 +741,12 @@ export default function CategoriesPage() {
             <DialogTitle>Xác nhận xoá danh mục</DialogTitle>
             <DialogDescription>
               Bạn có chắc muốn xoá danh mục &quot;{selectedCategory?.name}&quot;?
+              {selectedCategory && selectedCategory.children.length > 0 && (
+                <span className="block mt-2 text-yellow-600">
+                  Cảnh báo: Danh mục này có {selectedCategory.children.length} danh mục con.
+                  Cần xoá hoặc di chuyển danh mục con trước.
+                </span>
+              )}
               Hành động này không thể hoàn tác.
             </DialogDescription>
           </DialogHeader>
@@ -495,7 +757,7 @@ export default function CategoriesPage() {
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={deleteCategory.isPending}
+              disabled={deleteCategory.isPending || (selectedCategory?.children.length ?? 0) > 0}
             >
               {deleteCategory.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -507,5 +769,294 @@ export default function CategoriesPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ============================================================
+// Enhanced Category Tree with Add Child action
+// ============================================================
+
+interface EnhancedTreeProps {
+  nodes: CategoryNode[];
+  onEdit: (cat: CategoryNode) => void;
+  onDelete: (cat: CategoryNode) => void;
+  onAddChild: (parentId: string) => void;
+  allFlat: CategoryNode[];
+  depth?: number;
+}
+
+function EnhancedCategoryTree({
+  nodes,
+  onEdit,
+  onDelete,
+  onAddChild,
+  allFlat,
+  depth = 0,
+}: EnhancedTreeProps) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const handleToggle = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    const allIds = new Set<string>();
+    const collectIds = (items: CategoryNode[]) => {
+      items.forEach((item) => {
+        if (item.children.length > 0) {
+          allIds.add(item.id);
+          collectIds(item.children);
+        }
+      });
+    };
+    collectIds(nodes);
+    setExpandedIds(allIds);
+  };
+
+  const collapseAll = () => {
+    setExpandedIds(new Set());
+  };
+
+  return (
+    <div className="space-y-2">
+      {depth === 0 && nodes.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-2">
+          <span className="text-xs text-muted-foreground">
+            {nodes.length} danh mục gốc
+          </span>
+          <div className="flex gap-3">
+            <button
+              onClick={expandAll}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Mở rộng tất cả
+            </button>
+            <span className="text-muted-foreground">|</span>
+            <button
+              onClick={collapseAll}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Thu gọn tất cả
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="w-10 px-4 py-3"></th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                Tên danh mục
+              </th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground hidden lg:table-cell">
+                Slug
+              </th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground hidden xl:table-cell">
+                Trạng thái
+              </th>
+              <th className="w-24 px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {nodes.map((node) => {
+              const hasChildren = node.children.length > 0;
+              const isExpanded = expandedIds.has(node.id);
+
+              return (
+                <>
+                  <EnhancedCategoryRow
+                    key={node.id}
+                    node={node}
+                    depth={0}
+                    hasChildren={hasChildren}
+                    isExpanded={isExpanded}
+                    onToggle={() => handleToggle(node.id)}
+                    onEdit={() => onEdit(node)}
+                    onDelete={() => onDelete(node)}
+                    onAddChild={() => onAddChild(node.id)}
+                    allFlat={allFlat}
+                  />
+                  {hasChildren && isExpanded && (
+                    <EnhancedCategoryRow
+                      key={`${node.id}-children`}
+                      node={node}
+                      depth={1}
+                      hasChildren={hasChildren}
+                      isExpanded={isExpanded}
+                      onToggle={() => handleToggle(node.id)}
+                      onEdit={() => onEdit(node)}
+                      onDelete={() => onDelete(node)}
+                      onAddChild={() => onAddChild(node.id)}
+                      allFlat={allFlat}
+                      childrenOnly
+                    />
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+interface EnhancedRowProps {
+  node: CategoryNode;
+  depth: number;
+  hasChildren: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onAddChild: () => void;
+  allFlat: CategoryNode[];
+  childrenOnly?: boolean;
+}
+
+function EnhancedCategoryRow({
+  node,
+  depth,
+  hasChildren,
+  isExpanded,
+  onToggle,
+  onEdit,
+  onDelete,
+  onAddChild,
+  allFlat,
+  childrenOnly,
+}: EnhancedRowProps) {
+  const indentWidth = depth * 24;
+
+  if (childrenOnly) {
+    return (
+      <>
+        {node.children.map((child) => {
+          const childHasChildren = child.children.length > 0;
+          const childIsExpanded = false;
+          return (
+            <EnhancedCategoryRow
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              hasChildren={childHasChildren}
+              isExpanded={childIsExpanded}
+              onToggle={() => {}}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onAddChild={onAddChild}
+              allFlat={allFlat}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  return (
+    <tr className="group hover:bg-muted/30 transition-colors">
+      <td className="w-10 px-4 py-3">
+        <div style={{ paddingLeft: indentWidth }} className="flex items-center">
+          {hasChildren ? (
+            <button
+              onClick={onToggle}
+              className="rounded p-0.5 hover:bg-muted transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronDown className="size-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="size-4 text-muted-foreground" />
+              )}
+            </button>
+          ) : (
+            <span className="block w-5" />
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div style={{ paddingLeft: hasChildren ? 0 : 24 }}>
+            {node.level === 0 ? (
+              hasChildren ? (
+                <FolderOpen className="size-5 text-amber-500 shrink-0" />
+              ) : (
+                <FolderOpen className="size-5 text-amber-400 shrink-0" />
+              )
+            ) : hasChildren ? (
+              <FolderOpen className="size-4 text-amber-500 shrink-0" />
+            ) : (
+              <FolderOpen className="size-4 text-amber-400 shrink-0" />
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span
+              className={
+                node.level === 0 ? "font-semibold text-sm" : "font-medium text-sm"
+              }
+            >
+              {node.name}
+            </span>
+            {hasChildren && (
+              <span className="text-xs text-muted-foreground">
+                {node.children.length} danh mục con
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3 hidden lg:table-cell">
+        <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+          {node.handle || "—"}
+        </code>
+      </td>
+      <td className="px-4 py-3 hidden xl:table-cell">
+        <span
+          className={
+            node.is_active
+              ? "inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800"
+              : "inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
+          }
+        >
+          {node.is_active ? "Hoạt động" : "Không hoạt động"}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1 justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onAddChild}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-xs h-8"
+            title="Thêm danh mục con"
+          >
+            <PlusCircle className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onEdit}
+            className="opacity-0 group-hover:opacity-100 transition-opacity size-8"
+            title="Sửa"
+          >
+            <Pencil className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            className="opacity-0 group-hover:opacity-100 transition-opacity size-8 text-destructive hover:text-destructive"
+            title="Xoá"
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </div>
+      </td>
+    </tr>
   );
 }

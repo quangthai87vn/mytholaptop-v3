@@ -1,0 +1,25 @@
+{
+  "company": {
+    "name": "MỸ THO LAPTOP",
+    "website": "https://mytholaptop.vn",
+    "phone": "0907.077.226",
+    "address": "46/07 Lê Thị Hồng Gấm, Phường Thới Sơn, Tỉnh Đồng Tháp",
+    "logoUrl": "https://mytholaptop.vn/wp-content/uploads/2024/07/logo-mytholaptop.webp"
+  },
+  "wooCommerce": {
+    "wordpressUrl": "https://mytholaptop.vn/wp-json",
+    "consumerKey": "ck_dc053e3e88a9391434fb0f4027e349a811b65191",
+    "consumerSecret": "cs_35b45e5ff1c69777010eb57ff296ba8afdb7d9d8"
+  },
+  "medusa": {
+    "backendUrl": "http://backend:9000",
+    "adminApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY3Rvcl9pZCI6InVzZXJfMDFLUzdHUzEyUEI1WVM1OFlUMEQ1MTFXRVAiLCJhY3Rvcl90eXBlIjoidXNlciIsImF1dGhfaWRlbnRpdGlfaWQiOiJhdXRoaWRfMDFLUzdHUzE1OTFETUcwUUU2U0RaUzRHSkgiLCJhdXRoX3Byb3ZpZGVyIjoiZW1haWxwYXNzIiwiYXBwX21ldGFkYXRhIjp7InVzZXJfaWQiOiJ1c2VyXzAxS1M3R1MxMlBCNVlTNThZVDBENTExV0VQIn0sInVzZXJfbWV0YWRhdGEiOnt9LCJpYXQiOjE3Nzk0NTA2MDQsImV4cCI6MTc3OTUzNzAwNH0.VS612afo-cOvD0Da8rgWoDu5U-A23XdIZJrF5lwMMKE",
+    "adminEmail": "quangthai87@gmail.com",
+    "adminPassword": "1P@ssw0rdphatxitnhat"
+  },
+  "ui": {
+    "primaryColor": "#E60012",
+    "darkMode": false,
+    "sidebarCollapsed": false
+  }
+}

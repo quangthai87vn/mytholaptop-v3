@@ -40,10 +40,10 @@ type WebPost = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "success" | "warning" | "secondary" }> = {
-  published: { label: "Da dang", variant: "success" },
-  scheduled: { label: "Da len lich", variant: "warning" },
-  draft: { label: "Nhap", variant: "secondary" },
-  archived: { label: "Luu tru", variant: "secondary" },
+  published: { label: "Đã đăng", variant: "success" },
+  scheduled: { label: "Đã lên lịch", variant: "warning" },
+  draft: { label: "Nháp", variant: "secondary" },
+  archived: { label: "Lưu trữ", variant: "secondary" },
 };
 
 export default function WebsitePostsPage() {
@@ -64,7 +64,7 @@ export default function WebsitePostsPage() {
         setPosts(result.data || []);
       }
     } catch {
-      toast.error("Loi khi lay danh sach");
+      toast.error("Lỗi khi lấy danh sách");
     } finally {
       setLoading(false);
     }
@@ -79,15 +79,15 @@ export default function WebsitePostsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Bai viet Website</h1>
+          <h1 className="text-2xl font-bold">Bài viết Website</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Quan ly bai viet SEO cho website
+            Quản lý bài viết SEO cho website
           </p>
         </div>
         <Button asChild className="gap-2">
           <a href="/content/ai-generator">
             <Plus className="size-4" />
-            Tao bai viet
+            Tạo bài viết
           </a>
         </Button>
       </div>
@@ -99,7 +99,7 @@ export default function WebsitePostsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Tim bai viet, SEO keyword..."
+                placeholder="Tìm bài viết, SEO keyword..."
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -107,10 +107,10 @@ export default function WebsitePostsPage() {
             </div>
             <select className="h-10 px-3 rounded-md border border-input bg-background text-sm"
               value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">Tat ca trang thai</option>
-              <option value="draft">Nhap</option>
-              <option value="scheduled">Da len lich</option>
-              <option value="published">Da dang</option>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="draft">Nháp</option>
+              <option value="scheduled">Đã lên lịch</option>
+              <option value="published">Đã đăng</option>
             </select>
             <Button variant="outline" size="icon" onClick={fetchPosts}>
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -125,11 +125,11 @@ export default function WebsitePostsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Bai viet</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead>San pham</TableHead>
-                <TableHead className="w-[120px]">Trang thai</TableHead>
-                <TableHead className="w-[160px]">Ngay tao</TableHead>
+                  <TableHead>Bài viết</TableHead>
+                  <TableHead>Slug</TableHead>
+                  <TableHead>Sản phẩm</TableHead>
+                  <TableHead className="w-[120px]">Trạng thái</TableHead>
+                  <TableHead className="w-[160px]">Ngày tạo</TableHead>
                 <TableHead className="w-[80px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -143,7 +143,7 @@ export default function WebsitePostsPage() {
               ) : posts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Khong co bai viet nao
+                    Không có bài viết nào
                   </TableCell>
                 </TableRow>
               ) : (
@@ -158,7 +158,7 @@ export default function WebsitePostsPage() {
                       <TableCell>
                         <div className="min-w-0">
                           <p className="font-medium text-sm truncate max-w-[250px]">
-                            {post.title || "(Khong co tieu de)"}
+                            {post.title || "(Không có tiêu đề)"}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {formatDate(post.created_at)}

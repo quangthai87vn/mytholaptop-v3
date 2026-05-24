@@ -8,7 +8,7 @@
   </a>
 </p>
 <h1 align="center">
-  Medusa DTC Starter
+  Medusa B2B Starter
 </h1>
 
 <h4 align="center">
@@ -23,13 +23,9 @@
   <a href="https://github.com/medusajs/medusa/blob/develop/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="Medusa is released under the MIT license." />
   </a>
-  <a href="https://circleci.com/gh/medusajs/medusa">
-    <img src="https://circleci.com/gh/medusajs/medusa.svg?style=shield" alt="Current CircleCI build status." />
-  </a>
   <a href="https://github.com/medusajs/medusa/blob/develop/CONTRIBUTING.md">
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs welcome!" />
   </a>
-    <a href="https://www.producthunt.com/posts/medusa"><img src="https://img.shields.io/badge/Product%20Hunt-%231%20Product%20of%20the%20Day-%23DA552E" alt="Product Hunt"></a>
   <a href="https://discord.gg/xpCwq3Kfn8">
     <img src="https://img.shields.io/badge/chat-on%20discord-7289DA.svg" alt="Discord Chat" />
   </a>
@@ -38,19 +34,20 @@
   </a>
 </p>
 
-# Medusa DTC Starter
+# Medusa B2B Starter
 
-A production-ready monorepo starter for direct-to-consumer ecommerce stores powered by Medusa and Next.js. Includes a fully featured storefront with product browsing, cart, checkout, customer accounts, and order management.
+An official Medusa starter for B2B ecommerce, built with [Medusa](https://medusajs.com) and [Next.js 15](https://nextjs.org). It covers common business-to-business requirements out of the box and is designed to be customized and extended.
 
 ## Features
 
-- All of [Medusa's commerce features](https://docs.medusajs.com/resources/commerce-modules)
-- Multi-region support with automatic country detection
-- Product catalog with variant selection
-- Cart with promotion codes
-- Multi-step checkout with shipping and payment
-- Customer accounts with order history and address management
-- Order transfer between accounts
+- **Company management** — Create and manage companies, invite employees, and assign roles
+- **Spending limits** — Set per-employee spending limits with configurable reset frequencies
+- **Approval workflows** — Require admin or sales manager approval before orders are placed
+- **Quote management** — Allow customers and merchants to negotiate quotes with messaging
+- **Order editing** — Adjust order items, pricing, and totals after placement
+- **Bulk add-to-cart** — Add multiple products to the cart at once
+- **Promotions** — Manual and automatic promotion support with free shipping progress
+- **Full ecommerce** — Products, collections, cart, checkout, and order history
 
 ## Getting Started
 
@@ -72,8 +69,8 @@ The fastest way to get started is deploying with [Medusa Cloud](https://cloud.me
 1. Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/medusajs/dtc-starter.git
-cd dtc-starter
+git clone https://github.com/medusajs/b2b-starter.git
+cd b2b-starter
 pnpm install
 ```
 
@@ -87,7 +84,7 @@ cp apps/backend/.env.template apps/backend/.env
 
 ```bash
 # Replace with actual database URL, make sure the database exists.
-DATABASE_URL=postgres://postgres:@localhost:5432/medusa-dtc-starter
+DATABASE_URL=postgres://postgres:@localhost:5432/medusa-b2b-starter
 ```
 
 4. Run migrations:
@@ -142,17 +139,31 @@ pnpm dev
 
 ## Configuration
 
-The storefront is configured via environment variables in `apps/storefront/.env.local`:
+### Backend (`apps/backend/.env`)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY` | Publishable API key from your Medusa backend | — |
-| `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | URL of your Medusa backend | `http://localhost:9000` |
-| `NEXT_PUBLIC_DEFAULT_REGION` | Default region country code | `dk` |
-| `NEXT_PUBLIC_BASE_URL` | Base URL of the storefront | `https://localhost:8000` |
-| `NEXT_PUBLIC_STRIPE_KEY` | Stripe publishable key (optional) | — |
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection string (optional) |
+| `JWT_SECRET` | Secret used to sign JWT tokens |
+| `COOKIE_SECRET` | Secret used to sign session cookies |
+
+### Storefront (`apps/storefront/.env.local`)
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | URL of the Medusa backend |
+| `NEXT_PUBLIC_BASE_URL` | Public URL of the storefront |
+| `NEXT_PUBLIC_DEFAULT_REGION` | Default region code (e.g. `us`) |
+| `REVALIDATE_SECRET` | Secret for on-demand cache revalidation |
 
 ## Resources
 
 - [Medusa Documentation](https://docs.medusajs.com)
-- [Medusa Cloud](https://cloud.medusajs.com)
+- [Medusa B2B Commerce Recipe](https://docs.medusajs.com/resources/recipes/b2b)
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Discord Community](https://discord.gg/xpCwq3Kfn8)
+
+## License
+
+Licensed under the [MIT License](./LICENSE).

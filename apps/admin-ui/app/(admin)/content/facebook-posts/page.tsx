@@ -56,10 +56,10 @@ type FBPost = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "success" | "warning" | "secondary" | "destructive"; icon: React.ComponentType<{ className?: string }> }> = {
-  published: { label: "Da dang", variant: "success", icon: CheckCircle },
-  scheduled: { label: "Da len lich", variant: "warning", icon: Clock },
-  draft: { label: "Nhap", variant: "secondary", icon: Clock },
-  archived: { label: "Luu tru", variant: "secondary", icon: Clock },
+  published: { label: "Đã đăng", variant: "success", icon: CheckCircle },
+  scheduled: { label: "Đã lên lịch", variant: "warning", icon: Clock },
+  draft: { label: "Nháp", variant: "secondary", icon: Clock },
+  archived: { label: "Lưu trữ", variant: "secondary", icon: Clock },
 };
 
 export default function FacebookPostsPage() {
@@ -88,7 +88,7 @@ export default function FacebookPostsPage() {
         setPosts(data);
       }
     } catch {
-      toast.error("Loi khi lay danh sach");
+      toast.error("Lỗi khi lấy danh sách");
     } finally {
       setLoading(false);
     }
@@ -99,15 +99,15 @@ export default function FacebookPostsPage() {
   }, [fetchPosts]);
 
   const handleDelete = async (post: FBPost) => {
-    if (!confirm("Xoa bai viet nay?")) return;
+    if (!confirm("Xóa bài viết này?")) return;
     try {
       const res = await fetch(`/api/content/items/${post.id}`, { method: "DELETE" });
       if (res.ok) {
-        toast.success("Da xoa!");
+        toast.success("Đã xóa!");
         await fetchPosts();
       }
     } catch {
-      toast.error("Loi khi xoa");
+      toast.error("Lỗi khi xóa");
     }
   };
 
@@ -116,15 +116,15 @@ export default function FacebookPostsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Bai viet Facebook</h1>
+          <h1 className="text-2xl font-bold">Bài viết Facebook</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Quan ly noi dung bai viet Facebook
+            Quản lý nội dung bài viết Facebook
           </p>
         </div>
         <Button asChild className="gap-2">
           <a href="/content/ai-generator">
             <Plus className="size-4" />
-            Tao bai viet
+            Tạo bài viết
           </a>
         </Button>
       </div>
@@ -136,7 +136,7 @@ export default function FacebookPostsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Tim bai viet, san pham..."
+                placeholder="Tìm bài viết, sản phẩm..."
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -144,16 +144,16 @@ export default function FacebookPostsPage() {
             </div>
             <select className="h-10 px-3 rounded-md border border-input bg-background text-sm"
               value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">Tat ca trang thai</option>
-              <option value="draft">Nhap</option>
-              <option value="scheduled">Da len lich</option>
-              <option value="published">Da dang</option>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="draft">Nháp</option>
+              <option value="scheduled">Đã lên lịch</option>
+              <option value="published">Đã đăng</option>
             </select>
             <select className="h-10 px-3 rounded-md border border-input bg-background text-sm"
               value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
-              <option value="all">Tat ca nguon</option>
-              <option value="ai">AI tao</option>
-              <option value="manual">Thu cong</option>
+              <option value="all">Tất cả nguồn</option>
+              <option value="ai">AI tạo</option>
+              <option value="manual">Thủ công</option>
             </select>
             <Button variant="outline" size="icon" onClick={fetchPosts}>
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -168,11 +168,11 @@ export default function FacebookPostsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Bai viet</TableHead>
-                <TableHead>San pham</TableHead>
-                <TableHead className="w-[100px]">Nguon</TableHead>
-                <TableHead className="w-[120px]">Trang thai</TableHead>
-                <TableHead className="w-[160px]">Ngay tao</TableHead>
+                  <TableHead>Bài viết</TableHead>
+                  <TableHead>Sản phẩm</TableHead>
+                  <TableHead className="w-[100px]">Nguồn</TableHead>
+                  <TableHead className="w-[120px]">Trạng thái</TableHead>
+                  <TableHead className="w-[160px]">Ngày tạo</TableHead>
                 <TableHead className="w-[80px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -186,7 +186,7 @@ export default function FacebookPostsPage() {
               ) : posts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Khong co bai viet nao
+                    Không có bài viết nào
                   </TableCell>
                 </TableRow>
               ) : (
@@ -201,7 +201,7 @@ export default function FacebookPostsPage() {
                       <TableCell>
                         <div className="min-w-0">
                           <p className="font-medium text-sm truncate max-w-[300px]">
-                            {post.title || "(Khong co tieu de)"}
+                            {post.title || "(Không có tiêu đề)"}
                           </p>
                           {reach !== undefined && (
                             <p className="text-xs text-muted-foreground mt-0.5">
@@ -244,18 +244,18 @@ export default function FacebookPostsPage() {
                               <DropdownMenuItem onClick={() => {
                                 if (post.content_body) {
                                   navigator.clipboard.writeText(post.content_body);
-                                  toast.success("Da copy noi dung!");
+                                  toast.success("Đã copy nội dung!");
                                 }
                               }}>
                                 <Copy className="mr-2 size-4" />Copy
                               </DropdownMenuItem>
                               {post.status === "draft" && (
                                 <DropdownMenuItem>
-                                  <Send className="mr-2 size-4" />Len lich dang
+                                  <Send className="mr-2 size-4" />Lên lịch đăng
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(post)}>
-                                <MoreHorizontal className="mr-2 size-4" />Xoa
+                                <MoreHorizontal className="mr-2 size-4" />Xóa
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -276,10 +276,10 @@ export default function FacebookPostsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Facebook className="size-5 text-blue-600" />
-              {viewPost?.title || "Bai viet Facebook"}
+              {viewPost?.title || "Bài viết Facebook"}
             </DialogTitle>
             <DialogDescription>
-              {viewPost?.product_name && `San pham: ${viewPost.product_name}`}
+              {viewPost?.product_name && `Sản phẩm: ${viewPost.product_name}`}
             </DialogDescription>
           </DialogHeader>
           {viewPost && (
@@ -293,19 +293,19 @@ export default function FacebookPostsPage() {
                 )}
               </div>
               <div className="bg-muted/50 rounded-lg p-4 whitespace-pre-wrap text-sm">
-                {viewPost.content_body || "(Khong co noi dung)"}
+                {viewPost.content_body || "(Không có nội dung)"}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewPost(null)}>Dong</Button>
+            <Button variant="outline" onClick={() => setViewPost(null)}>Đóng</Button>
             <Button onClick={() => {
               if (viewPost?.content_body) {
                 navigator.clipboard.writeText(viewPost.content_body);
-                toast.success("Da copy!");
+                toast.success("Đã copy!");
               }
             }}>
-              <Copy className="mr-2 size-4" />Copy noi dung
+              <Copy className="mr-2 size-4" />Copy nội dung
             </Button>
           </DialogFooter>
         </DialogContent>

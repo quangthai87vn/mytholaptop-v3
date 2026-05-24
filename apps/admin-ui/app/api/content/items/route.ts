@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     console.error("[Content Items GET]", err);
-    return NextResponse.json({ error: "Loi khi lay danh sach noi dung" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi lấy danh sách nội dung" }, { status: 500 });
   }
 }
 
@@ -56,6 +56,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: item }, { status: 201 });
   } catch (err) {
     console.error("[Content Items POST]", err);
-    return NextResponse.json({ error: "Loi khi tao noi dung" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi tạo nội dung" }, { status: 500 });
   }
 }

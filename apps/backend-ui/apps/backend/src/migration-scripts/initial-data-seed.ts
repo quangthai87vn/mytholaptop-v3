@@ -8,7 +8,6 @@ import {
 import {
   createApiKeysWorkflow,
   createCollectionsWorkflow,
-  createInventoryLevelsWorkflow,
   createProductCategoriesWorkflow,
   createProductsWorkflow,
   createRegionsWorkflow,
@@ -29,7 +28,6 @@ export default async function initial_data_seed({
 }) {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
   const link = container.resolve(ContainerRegistrationKeys.LINK);
-  const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const fulfillmentModuleService = container.resolve(
     ModuleRegistrationName.FULFILLMENT
   );
@@ -148,11 +146,17 @@ export default async function initial_data_seed({
   });
 
   logger.info("Seeding fulfillment data...");
-  // This is created by a migration script in core.
-  const { data: shippingProfileResult } = await query.graph({
-    entity: "shipping_profile",
-    fields: ["id"],
-  });
+  const { result: shippingProfileResult } =
+    await createShippingProfilesWorkflow(container).run({
+      input: {
+        data: [
+          {
+            name: "Default",
+            type: "default",
+          },
+        ],
+      },
+    });
   const shippingProfile = shippingProfileResult[0];
 
   const fulfillmentSet = await fulfillmentModuleService.createFulfillmentSets({
@@ -295,6 +299,18 @@ export default async function initial_data_seed({
   logger.info("Finished seeding stock location data.");
 
   logger.info("Seeding product data...");
+  const {
+    result: [collection],
+  } = await createCollectionsWorkflow(container).run({
+    input: {
+      collections: [
+        {
+          title: "Featured",
+          handle: "featured",
+        },
+      ],
+    },
+  });
 
   const { result: categoryResult } = await createProductCategoriesWorkflow(
     container
@@ -302,19 +318,19 @@ export default async function initial_data_seed({
     input: {
       product_categories: [
         {
-          name: "Shirts",
+          name: "Laptops",
           is_active: true,
         },
         {
-          name: "Sweatshirts",
+          name: "Accessories",
           is_active: true,
         },
         {
-          name: "Pants",
+          name: "Phones",
           is_active: true,
         },
         {
-          name: "Merch",
+          name: "Monitors",
           is_active: true,
         },
       ],
@@ -325,484 +341,72 @@ export default async function initial_data_seed({
     input: {
       products: [
         {
-          title: "Medusa T-Shirt",
+          title:
+            '16" Ultra-Slim AI Laptop | 3K OLED | 1.1cm Thin | 6-Speaker Audio',
+          collection_id: collection.id,
           category_ids: [
-            categoryResult.find((cat) => cat.name === "Shirts")!.id,
+            categoryResult.find((cat) => cat.name === "Laptops")?.id!,
           ],
           description:
-            "Reimagine the feeling of a classic T-shirt. With our cotton T-shirts, everyday essentials no longer have to be ordinary.",
-          handle: "t-shirt",
+            "This ultra-thin 16-inch laptop is a sophisticated, high-performance machine for the new era of artificial intelligence. It has been completely redesigned from the inside out. The cabinet features an exquisite new ceramic-aluminum composite material in a range of nature-inspired colors. This material provides durability while completing the ultra-slim design and resisting the test of time. This innovative computer utilizes the latest AI-enhanced processor with quiet ambient cooling. It's designed to enrich your lifestyle on the go with an astonishingly thin 1.1cm chassis that houses an advanced 16-inch 3K OLED display and immersive six-speaker audio.",
           weight: 400,
           status: ProductStatus.PUBLISHED,
-          shipping_profile_id: shippingProfile.id,
           images: [
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-black-front.png",
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/laptop-front.png",
             },
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-black-back.png",
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/laptop-side.png",
             },
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-white-front.png",
-            },
-            {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-white-back.png",
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/laptop-top.png",
             },
           ],
           options: [
             {
-              title: "Size",
-              values: ["S", "M", "L", "XL"],
+              title: "Storage",
+              values: ["256 GB", "512 GB"],
             },
             {
               title: "Color",
-              values: ["Black", "White"],
+              values: ["Blue", "Red"],
             },
           ],
           variants: [
             {
-              title: "S / Black",
-              sku: "SHIRT-S-BLACK",
+              title: "256 GB / Blue",
+              sku: "256-BLUE",
               options: {
-                Size: "S",
-                Color: "Black",
+                Storage: "256 GB",
+                Color: "Blue",
               },
+              manage_inventory: false,
               prices: [
                 {
-                  amount: 10,
+                  amount: 1299,
                   currency_code: "eur",
                 },
                 {
-                  amount: 15,
+                  amount: 1299,
                   currency_code: "usd",
                 },
               ],
             },
             {
-              title: "S / White",
-              sku: "SHIRT-S-WHITE",
+              title: "512 GB / Red",
+              sku: "512-RED",
               options: {
-                Size: "S",
-                Color: "White",
+                Storage: "512 GB",
+                Color: "Red",
               },
+              manage_inventory: false,
               prices: [
                 {
-                  amount: 10,
+                  amount: 1259,
                   currency_code: "eur",
                 },
                 {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "M / Black",
-              sku: "SHIRT-M-BLACK",
-              options: {
-                Size: "M",
-                Color: "Black",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "M / White",
-              sku: "SHIRT-M-WHITE",
-              options: {
-                Size: "M",
-                Color: "White",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "L / Black",
-              sku: "SHIRT-L-BLACK",
-              options: {
-                Size: "L",
-                Color: "Black",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "L / White",
-              sku: "SHIRT-L-WHITE",
-              options: {
-                Size: "L",
-                Color: "White",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "XL / Black",
-              sku: "SHIRT-XL-BLACK",
-              options: {
-                Size: "XL",
-                Color: "Black",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "XL / White",
-              sku: "SHIRT-XL-WHITE",
-              options: {
-                Size: "XL",
-                Color: "White",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-          ],
-          sales_channels: [
-            {
-              id: defaultSalesChannel.id,
-            },
-          ],
-        },
-        {
-          title: "Medusa Sweatshirt",
-          category_ids: [
-            categoryResult.find((cat) => cat.name === "Sweatshirts")!.id,
-          ],
-          description:
-            "Reimagine the feeling of a classic sweatshirt. With our cotton sweatshirt, everyday essentials no longer have to be ordinary.",
-          handle: "sweatshirt",
-          weight: 400,
-          status: ProductStatus.PUBLISHED,
-          shipping_profile_id: shippingProfile.id,
-          images: [
-            {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatshirt-vintage-front.png",
-            },
-            {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatshirt-vintage-back.png",
-            },
-          ],
-          options: [
-            {
-              title: "Size",
-              values: ["S", "M", "L", "XL"],
-            },
-          ],
-          variants: [
-            {
-              title: "S",
-              sku: "SWEATSHIRT-S",
-              options: {
-                Size: "S",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "M",
-              sku: "SWEATSHIRT-M",
-              options: {
-                Size: "M",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "L",
-              sku: "SWEATSHIRT-L",
-              options: {
-                Size: "L",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "XL",
-              sku: "SWEATSHIRT-XL",
-              options: {
-                Size: "XL",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-          ],
-          sales_channels: [
-            {
-              id: defaultSalesChannel.id,
-            },
-          ],
-        },
-        {
-          title: "Medusa Sweatpants",
-          category_ids: [
-            categoryResult.find((cat) => cat.name === "Pants")!.id,
-          ],
-          description:
-            "Reimagine the feeling of classic sweatpants. With our cotton sweatpants, everyday essentials no longer have to be ordinary.",
-          handle: "sweatpants",
-          weight: 400,
-          status: ProductStatus.PUBLISHED,
-          shipping_profile_id: shippingProfile.id,
-          images: [
-            {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatpants-gray-front.png",
-            },
-            {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatpants-gray-back.png",
-            },
-          ],
-          options: [
-            {
-              title: "Size",
-              values: ["S", "M", "L", "XL"],
-            },
-          ],
-          variants: [
-            {
-              title: "S",
-              sku: "SWEATPANTS-S",
-              options: {
-                Size: "S",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "M",
-              sku: "SWEATPANTS-M",
-              options: {
-                Size: "M",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "L",
-              sku: "SWEATPANTS-L",
-              options: {
-                Size: "L",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "XL",
-              sku: "SWEATPANTS-XL",
-              options: {
-                Size: "XL",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-          ],
-          sales_channels: [
-            {
-              id: defaultSalesChannel.id,
-            },
-          ],
-        },
-        {
-          title: "Medusa Shorts",
-          category_ids: [
-            categoryResult.find((cat) => cat.name === "Merch")!.id,
-          ],
-          description:
-            "Reimagine the feeling of classic shorts. With our cotton shorts, everyday essentials no longer have to be ordinary.",
-          handle: "shorts",
-          weight: 400,
-          status: ProductStatus.PUBLISHED,
-          shipping_profile_id: shippingProfile.id,
-          images: [
-            {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/shorts-vintage-front.png",
-            },
-            {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/shorts-vintage-back.png",
-            },
-          ],
-          options: [
-            {
-              title: "Size",
-              values: ["S", "M", "L", "XL"],
-            },
-          ],
-          variants: [
-            {
-              title: "S",
-              sku: "SHORTS-S",
-              options: {
-                Size: "S",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "M",
-              sku: "SHORTS-M",
-              options: {
-                Size: "M",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "L",
-              sku: "SHORTS-L",
-              options: {
-                Size: "L",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
-                  currency_code: "usd",
-                },
-              ],
-            },
-            {
-              title: "XL",
-              sku: "SHORTS-XL",
-              options: {
-                Size: "XL",
-              },
-              prices: [
-                {
-                  amount: 10,
-                  currency_code: "eur",
-                },
-                {
-                  amount: 15,
+                  amount: 1259,
                   currency_code: "usd",
                 },
               ],
@@ -817,24 +421,541 @@ export default async function initial_data_seed({
       ],
     },
   });
-  logger.info("Finished seeding product data.");
 
-  logger.info("Seeding inventory levels.");
-
-  const { data: inventoryItems } = await query.graph({
-    entity: "inventory_item",
-    fields: ["id"],
-  });
-
-  await createInventoryLevelsWorkflow(container).run({
+  await createProductsWorkflow(container).run({
     input: {
-      inventory_levels: inventoryItems.map((item) => ({
-        location_id: stockLocation.id,
-        stocked_quantity: 1000000,
-        inventory_item_id: item.id,
-      })),
+      products: [
+        {
+          title: "1080p HD Pro Webcam | Superior Video | Privacy enabled",
+          category_ids: [
+            categoryResult.find((cat) => cat.name === "Accessories")?.id!,
+          ],
+          description:
+            "High-quality 1080p HD webcam that elevates your work environment with superior video and audio that outperforms standard laptop cameras. Achieve top-tier video collaboration at a cost-effective price point, ideal for widespread deployment across your organization.",
+          weight: 400,
+          status: ProductStatus.PUBLISHED,
+          images: [
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/camera-front.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/camera-side.png",
+            },
+          ],
+          options: [
+            {
+              title: "Color",
+              values: ["Black", "White"],
+            },
+          ],
+          variants: [
+            {
+              title: "Webcam Black",
+              sku: "WEBCAM-BLACK",
+              options: {
+                Color: "Black",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 59,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 59,
+                  currency_code: "usd",
+                },
+              ],
+            },
+            {
+              title: "Webcam White",
+              sku: "WEBCAM-WHITE",
+              options: {
+                Color: "White",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 65,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 65,
+                  currency_code: "usd",
+                },
+              ],
+            },
+          ],
+          sales_channels: [
+            {
+              id: defaultSalesChannel.id,
+            },
+          ],
+        },
+      ],
     },
   });
 
-  logger.info("Finished seeding inventory levels data.");
+  await createProductsWorkflow(container).run({
+    input: {
+      products: [
+        {
+          title: `6.5" Ultra HD Smartphone | 3x Impact-Resistant Screen`,
+          collection_id: collection.id,
+          category_ids: [
+            categoryResult.find((cat) => cat.name === "Phones")?.id!,
+          ],
+          description:
+            'This premium smartphone is crafted from durable and lightweight aerospace-grade aluminum, featuring an expansive 6.5" Ultra-High Definition AMOLED display. It boasts exceptional durability with a cutting-edge nanocrystal glass front, offering three times the impact resistance of standard smartphone screens. The device combines sleek design with robust protection, setting a new standard for smartphone resilience and visual excellence. Copy',
+          weight: 400,
+          status: ProductStatus.PUBLISHED,
+          images: [
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/phone-front.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/phone-side.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/phone-bottom.png",
+            },
+          ],
+          options: [
+            {
+              title: "Memory",
+              values: ["256 GB", "512 GB"],
+            },
+            {
+              title: "Color",
+              values: ["Purple", "Red"],
+            },
+          ],
+          variants: [
+            {
+              title: "256 GB Purple",
+              sku: "PHONE-256-PURPLE",
+              options: {
+                Memory: "256 GB",
+                Color: "Purple",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 999,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 999,
+                  currency_code: "usd",
+                },
+              ],
+            },
+            {
+              title: "256 GB Red",
+              sku: "PHONE-256-RED",
+              options: {
+                Memory: "256 GB",
+                Color: "Red",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 959,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 959,
+                  currency_code: "usd",
+                },
+              ],
+            },
+          ],
+          sales_channels: [
+            {
+              id: defaultSalesChannel.id,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  await createProductsWorkflow(container).run({
+    input: {
+      products: [
+        {
+          title: `34" QD-OLED Curved Gaming Monitor | Ultra-Wide | Infinite Contrast | 175Hz`,
+          collection_id: collection.id,
+          category_ids: [
+            categoryResult.find((cat) => cat.name === "Monitors")?.id!,
+          ],
+          description:
+            "Experience the pinnacle of display technology with this 34-inch curved monitor. By merging OLED panels and Quantum Dot technology, this QD-OLED screen delivers exceptional contrast, deep blacks, unlimited viewing angles, and vivid colors. The curved design provides an immersive experience, allowing you to enjoy the best of both worlds in one cutting-edge display. This innovative monitor represents the ultimate fusion of visual performance and immersive design.",
+          weight: 400,
+          status: ProductStatus.PUBLISHED,
+          images: [
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/screen-front.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/screen-side.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/screen-top.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/screen-back.png",
+            },
+          ],
+          options: [
+            {
+              title: "Color",
+              values: ["White", "Black"],
+            },
+          ],
+          variants: [
+            {
+              title: "ACME Monitor 4k White",
+              sku: "ACME-MONITOR-WHITE",
+              options: {
+                Color: "White",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 599,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 599,
+                  currency_code: "usd",
+                },
+              ],
+            },
+            {
+              title: "ACME Monitor 4k White",
+              sku: "ACME-MONITOR-BLACK",
+              options: {
+                Color: "Black",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 599,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 599,
+                  currency_code: "usd",
+                },
+              ],
+            },
+          ],
+          sales_channels: [
+            {
+              id: defaultSalesChannel.id,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  await createProductsWorkflow(container).run({
+    input: {
+      products: [
+        {
+          title: "Hi-Fi Gaming Headset | Pro-Grade DAC | Hi-Res Certified",
+          collection_id: collection.id,
+          category_ids: [
+            categoryResult.find((cat) => cat.name === "Accessories")?.id!,
+          ],
+          description: `Experience studio-quality audio with this advanced acoustic system, which pairs premium hardware with high-fidelity sound and innovative audio software for an immersive listening experience. The integrated digital-to-analog converter (DAC) enhances the audio setup with high-resolution certification and a built-in amplifier, delivering exceptional sound clarity and depth. This comprehensive audio solution brings professional-grade sound to your personal environment, whether for gaming, music production, or general entertainment.`,
+          weight: 400,
+          status: ProductStatus.PUBLISHED,
+          images: [
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/headphone-front.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/headphone-side.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/headphone-top.png",
+            },
+          ],
+          options: [
+            {
+              title: "Color",
+              values: ["Black", "White"],
+            },
+          ],
+          variants: [
+            {
+              title: "Headphone Black",
+              sku: "HEADPHONE-BLACK",
+              options: {
+                Color: "Black",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 149,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 149,
+                  currency_code: "usd",
+                },
+              ],
+            },
+            {
+              title: "Headphone White",
+              sku: "HEADPHONE-WHITE",
+              options: {
+                Color: "White",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 149,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 149,
+                  currency_code: "usd",
+                },
+              ],
+            },
+          ],
+          sales_channels: [
+            {
+              id: defaultSalesChannel.id,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  await createProductsWorkflow(container).run({
+    input: {
+      products: [
+        {
+          title: "Wireless Keyboard | Touch ID | Numeric Keypad",
+          category_ids: [
+            categoryResult.find((cat) => cat.name === "Accessories")?.id!,
+          ],
+          description: `This wireless keyboard offers a comfortable typing experience with a numeric keypad and Touch ID. It features navigation buttons, full-sized arrow keys, and is ideal for spreadsheets and gaming. The rechargeable battery lasts about a month. It pairs automatically with compatible computers and includes a USB-C to Lightning cable for charging and pairing.`,
+          weight: 400,
+          status: ProductStatus.PUBLISHED,
+          images: [
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/keyboard-front.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/keyboard-side.png",
+            },
+          ],
+          options: [
+            {
+              title: "Color",
+              values: ["Black", "White"],
+            },
+          ],
+          variants: [
+            {
+              title: "Keyboard Black",
+              sku: "KEYBOARD-BLACK",
+              options: {
+                Color: "Black",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 99,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 99,
+                  currency_code: "usd",
+                },
+              ],
+            },
+            {
+              title: "Keyboard White",
+              sku: "KEYBOARD-WHITE",
+              options: {
+                Color: "White",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 99,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 99,
+                  currency_code: "usd",
+                },
+              ],
+            },
+          ],
+          sales_channels: [
+            {
+              id: defaultSalesChannel.id,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  await createProductsWorkflow(container).run({
+    input: {
+      products: [
+        {
+          title: "Wireless Rechargeable Mouse | Multi-Touch Surface",
+          category_ids: [
+            categoryResult.find((cat) => cat.name === "Accessories")?.id!,
+          ],
+          description: `This wireless keyboard offers a comfortable typing experience with a numeric keypad and Touch ID. It features navigation buttons, full-sized arrow keys, and is ideal for spreadsheets and gaming. The rechargeable battery lasts about a month. It pairs automatically with compatible computers and includes a USB-C to Lightning cable for charging and pairing.`,
+          weight: 400,
+          status: ProductStatus.PUBLISHED,
+          images: [
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/mouse-top.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/mouse-front.png",
+            },
+          ],
+          options: [
+            {
+              title: "Color",
+              values: ["Black", "White"],
+            },
+          ],
+          variants: [
+            {
+              title: "Mouse Black",
+              sku: "MOUSE-BLACK",
+              options: {
+                Color: "Black",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 79,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 79,
+                  currency_code: "usd",
+                },
+              ],
+            },
+            {
+              title: "Mouse White",
+              sku: "MOUSE-WHITE",
+              options: {
+                Color: "White",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 79,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 79,
+                  currency_code: "usd",
+                },
+              ],
+            },
+          ],
+          sales_channels: [
+            {
+              id: defaultSalesChannel.id,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  await createProductsWorkflow(container).run({
+    input: {
+      products: [
+        {
+          title: "Conference Speaker | High-Performance | Budget-Friendly",
+          category_ids: [
+            categoryResult.find((cat) => cat.name === "Accessories")?.id!,
+          ],
+          description: `This compact, powerful conference speaker offers exceptional, high-performance features at a surprisingly affordable price. Packed with advanced productivity-enhancing technology, it delivers premium functionality without the premium price tag. Experience better meetings and improved communication, regardless of where your team members are calling from.`,
+          weight: 400,
+          status: ProductStatus.PUBLISHED,
+          images: [
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/speaker-top.png",
+            },
+            {
+              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/speaker-front.png",
+            },
+          ],
+          options: [
+            {
+              title: "Color",
+              values: ["Black", "White"],
+            },
+          ],
+          variants: [
+            {
+              title: "Speaker Black",
+              sku: "SPEAKER-BLACK",
+              options: {
+                Color: "Black",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 79,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 79,
+                  currency_code: "usd",
+                },
+              ],
+            },
+            {
+              title: "Speaker White",
+              sku: "SPEAKER-WHITE",
+              options: {
+                Color: "White",
+              },
+              manage_inventory: false,
+              prices: [
+                {
+                  amount: 55,
+                  currency_code: "eur",
+                },
+                {
+                  amount: 55,
+                  currency_code: "usd",
+                },
+              ],
+            },
+          ],
+          sales_channels: [
+            {
+              id: defaultSalesChannel.id,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  logger.info("Finished seeding product data.");
 }

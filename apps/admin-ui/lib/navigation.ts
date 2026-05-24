@@ -111,6 +111,11 @@ export const NAV_ITEMS: NavItem[] = [
         href: "/content/settings",
         icon: Brain,
       },
+      {
+        title: "AI Playground",
+        href: "/content/ai-playground",
+        icon: Zap,
+      },
     ],
   },
   {
@@ -196,7 +201,7 @@ export const NAV_ITEMS: NavItem[] = [
         icon: RotateCcw,
       },
       {
-        title: "Giỏ hàng dở dang",
+        title: "Giỏ hàng đang dở",
         href: "/sales/carts",
         icon: ShoppingCart,
       },

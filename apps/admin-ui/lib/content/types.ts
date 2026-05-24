@@ -2,23 +2,134 @@
  * Shared TypeScript types for Content Module
  */
 
-export type AIProviderType = "openai" | "gemini" | "ollama" | "lmstudio";
+// ── Provider Types ───────────────────────────────────────────────────────────────
+
+export type AIProviderType =
+  | "openai" | "gemini" | "deepseek" | "huggingface"
+  | "ollama" | "lmstudio" | "openai-compatible"
+  | "openrouter" | "groq";
+
+export type ProviderGroupSlug = "cloud_api" | "ai_aggregator" | "local_llm" | "inference_platform";
+
+export type ProviderStatus = "active" | "inactive";
+export type ConnectionStatus = "connected" | "error" | "unknown" | "testing";
+
+export interface ProviderGroup {
+  id: number;
+  name: string;
+  slug: ProviderGroupSlug;
+  icon: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIProvider {
+  id: number;
+  // Legacy compatibility
+  provider?: AIProviderType | string;
+  display_name?: string;
+  base_url?: string | null;
+  is_active?: boolean;
+  sort_order?: number;
+  // New schema
+  name: string;
+  slug: string;
+  group_slug: ProviderGroupSlug;
+  type: string;
+  status: ProviderStatus;
+  is_system: boolean;
+  is_default: boolean;
+  connection_status: ConnectionStatus;
+  last_checked_at: string | null;
+  last_error: string | null;
+  custom_headers: Record<string, string>;
+  // Runtime config fields (from ai_providers columns)
+  model_name?: string | null;
+  temperature?: number | null;
+  streaming_enabled?: boolean | null;
+  timeout_ms?: number | null;
+  retry_count?: number | null;
+  // Encryption
+  api_key_encrypted?: string | null;
+  api_key_iv?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIProviderModel {
+  id: number;
+  provider_id: number;
+  model_name: string;
+  display_name: string | null;
+  context_length: number | null;
+  is_default: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIRuntimeConfig {
+  id?: number;
+  provider_id: number;
+  selected_model: string;
+  temperature: number;
+  max_output_tokens: number;
+  top_p: number;
+  frequency_penalty: number;
+  presence_penalty: number;
+  timeout_ms: number;
+  retry_count: number;
+  streaming_enabled: boolean;
+  custom_settings: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Input/Output types for API
+export interface AIProviderInput {
+  name: string;
+  slug: string;
+  group_slug: ProviderGroupSlug;
+  type: string;
+  base_url: string;
+  api_key?: string;
+  model_name?: string;
+  streaming_enabled?: boolean;
+  timeout_ms?: number;
+  retry_count?: number;
+  status?: ProviderStatus;
+  is_default?: boolean;
+  custom_headers?: Record<string, string>;
+  // Runtime config
+  temperature?: number;
+  max_output_tokens?: number;
+  top_p?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+}
+
+export interface AIRuntimeConfigInput {
+  provider_id: number;
+  selected_model: string;
+  temperature?: number;
+  max_output_tokens?: number;
+  top_p?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  timeout_ms?: number;
+  retry_count?: number;
+  streaming_enabled?: boolean;
+  custom_settings?: Record<string, unknown>;
+}
+
+// ── Content Types ────────────────────────────────────────────────────────────────
+
 export type ContentType = "facebook" | "website" | "video" | "image";
 export type ContentStatus = "draft" | "published" | "scheduled" | "archived";
 export type ScheduleStatus = "pending" | "published" | "failed" | "cancelled";
 export type PublishJobStatus = "pending" | "running" | "success" | "failed";
 export type MediaPromptStatus = "pending" | "generated" | "failed";
-
-export interface AIProvider {
-  id: number;
-  provider: AIProviderType;
-  display_name: string;
-  base_url: string | null;
-  is_active: boolean;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface AISettings {
   id: number;

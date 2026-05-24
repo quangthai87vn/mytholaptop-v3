@@ -1,4 +1,4 @@
-const { loadEnv } = require("@medusajs/utils");
+const { loadEnv } = require("@medusajs/framework/utils");
 loadEnv("test", process.cwd());
 
 module.exports = {
@@ -14,12 +14,12 @@ module.exports = {
   },
   testEnvironment: "node",
   moduleFileExtensions: ["js", "ts", "json"],
-  modulePathIgnorePatterns: ["dist/", "<rootDir>/.medusa/"],
+  modulePathIgnorePatterns: ["dist/"],
   setupFiles: ["./integration-tests/setup.js"],
 };
 
 if (process.env.TEST_TYPE === "integration:http") {
-  module.exports.testMatch = ["**/integration-tests/http/*.spec.[jt]s"];
+  module.exports.testMatch = ["**/integration-tests/http/**/*.spec.[jt]s"];
 } else if (process.env.TEST_TYPE === "integration:modules") {
   module.exports.testMatch = ["**/src/modules/*/__tests__/**/*.[jt]s"];
 } else if (process.env.TEST_TYPE === "unit") {

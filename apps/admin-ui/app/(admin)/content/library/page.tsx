@@ -53,14 +53,14 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ c
   facebook: { label: "Facebook", icon: Facebook, color: "text-blue-600", bg: "bg-blue-100" },
   website: { label: "Website", icon: Globe, color: "text-green-600", bg: "bg-green-100" },
   video: { label: "Video", icon: Video, color: "text-red-600", bg: "bg-red-100" },
-  image: { label: "Hinh anh", icon: ImageIcon, color: "text-purple-600", bg: "bg-purple-100" },
+  image: { label: "Hình ảnh", icon: ImageIcon, color: "text-purple-600", bg: "bg-purple-100" },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "success" | "warning" | "secondary" | "destructive" }> = {
-  published: { label: "Da dang", variant: "success" },
-  scheduled: { label: "Da len lich", variant: "warning" },
-  draft: { label: "Nhap", variant: "secondary" },
-  archived: { label: "Luu tru", variant: "secondary" },
+  published: { label: "Đã đăng", variant: "success" },
+  scheduled: { label: "Đã lên lịch", variant: "warning" },
+  draft: { label: "Nháp", variant: "secondary" },
+  archived: { label: "Lưu trữ", variant: "secondary" },
 };
 
 export default function LibraryPage() {
@@ -84,7 +84,7 @@ export default function LibraryPage() {
         setItems(result.data || []);
       }
     } catch {
-      toast.error("Loi khi lay danh sach");
+      toast.error("Lỗi khi lấy danh sách");
     } finally {
       setLoading(false);
     }
@@ -95,17 +95,17 @@ export default function LibraryPage() {
   }, [fetchItems]);
 
   const handleDelete = async (item: UIItem) => {
-    if (!confirm(`Xoa "${item.title || "khong co tieu de"}"?`)) return;
+    if (!confirm(`Xóa "${item.title || "không có tiêu đề"}"?`)) return;
     try {
       const res = await fetch(`/api/content/items/${item.id}`, { method: "DELETE" });
       if (res.ok) {
-        toast.success("Da xoa noi dung");
+        toast.success("Đã xóa nội dung");
         await fetchItems();
       } else {
-        toast.error("Loi khi xoa");
+        toast.error("Lỗi khi xóa");
       }
     } catch {
-      toast.error("Loi khi xoa");
+      toast.error("Lỗi khi xóa");
     }
   };
 
@@ -113,10 +113,10 @@ export default function LibraryPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Thu vien noi dung</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Tim kiem va tai su dung noi dung da tao
-        </p>
+          <h1 className="text-2xl font-bold">Thư viện nội dung</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Tìm kiếm và tái sử dụng nội dung đã tạo
+          </p>
       </div>
 
       {/* Filters */}
@@ -126,7 +126,7 @@ export default function LibraryPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Tim noi dung, san pham..."
+                placeholder="Tìm nội dung, sản phẩm..."
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -137,21 +137,21 @@ export default function LibraryPage() {
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
             >
-              <option value="all">Tat ca loai</option>
+              <option value="all">Tất cả loại</option>
               <option value="facebook">Facebook</option>
               <option value="website">Website</option>
               <option value="video">Video</option>
-              <option value="image">Anh</option>
+              <option value="image">Hình ảnh</option>
             </select>
             <select
               className="h-10 px-3 rounded-md border border-input bg-background text-sm"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
-              <option value="all">Tat ca trang thai</option>
-              <option value="published">Da dang</option>
-              <option value="scheduled">Da len lich</option>
-              <option value="draft">Nhap</option>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="published">Đã đăng</option>
+              <option value="scheduled">Đã lên lịch</option>
+              <option value="draft">Nháp</option>
             </select>
             <Button variant="outline" size="icon" onClick={fetchItems}>
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -166,10 +166,10 @@ export default function LibraryPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Noi dung</TableHead>
-                <TableHead>Loai</TableHead>
-                <TableHead>Trang thai</TableHead>
-                <TableHead>Ngay tao</TableHead>
+                  <TableHead>Nội dung</TableHead>
+                  <TableHead>Loại</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead>Ngày tạo</TableHead>
                 <TableHead className="w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -183,7 +183,7 @@ export default function LibraryPage() {
               ) : items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                    Khong tim thay noi dung nao
+                    Không tìm thấy nội dung nào
                   </TableCell>
                 </TableRow>
               ) : (
@@ -197,11 +197,11 @@ export default function LibraryPage() {
                       <TableCell>
                         <div className="min-w-0 max-w-[400px]">
                           <p className="font-medium text-sm truncate">
-                            {item.title || "(Khong co tieu de)"}
+                            {item.title || "(Không có tiêu đề)"}
                           </p>
                           {item.product_name && (
                             <p className="text-xs text-muted-foreground truncate mt-0.5">
-                              San pham: {item.product_name}
+                              Sản phẩm: {item.product_name}
                             </p>
                           )}
                           <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
@@ -233,7 +233,7 @@ export default function LibraryPage() {
                             onClick={() => {
                               if (item.content_body) {
                                 navigator.clipboard.writeText(item.content_body);
-                                toast.success("Da copy noi dung!");
+                                toast.success("Đã copy nội dung!");
                               }
                             }}
                           >
@@ -254,9 +254,9 @@ export default function LibraryPage() {
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{viewItem?.title || "Noi dung"}</DialogTitle>
+            <DialogTitle>{viewItem?.title || "Nội dung"}</DialogTitle>
             <DialogDescription>
-              {viewItem?.product_name && `San pham: ${viewItem.product_name}`}
+              {viewItem?.product_name && `Sản phẩm: ${viewItem.product_name}`}
             </DialogDescription>
           </DialogHeader>
           {viewItem && (
@@ -269,16 +269,16 @@ export default function LibraryPage() {
                 )}
               </div>
               <div className="bg-muted/50 rounded-lg p-4 whitespace-pre-wrap text-sm max-h-[400px] overflow-y-auto">
-                {viewItem.content_body || "(Khong co noi dung)"}
+                {viewItem.content_body || "(Không có nội dung)"}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewItem(null)}>Dong</Button>
+            <Button variant="outline" onClick={() => setViewItem(null)}>Đóng</Button>
             {viewItem?.content_body && (
               <Button onClick={() => {
                 navigator.clipboard.writeText(viewItem.content_body!);
-                toast.success("Da copy!");
+                toast.success("Đã copy!");
               }}>
                 <Copy className="mr-2 size-4" />Copy
               </Button>

@@ -47,18 +47,18 @@ type ImagePromptItem = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "success" | "warning" | "secondary" }> = {
-  published: { label: "Da dang", variant: "success" },
-  scheduled: { label: "Da len lich", variant: "warning" },
-  draft: { label: "Nhap", variant: "secondary" },
+  published: { label: "Đã đăng", variant: "success" },
+  scheduled: { label: "Đã lên lịch", variant: "warning" },
+  draft: { label: "Nháp", variant: "secondary" },
 };
 
 const STYLE_CONFIG: Record<string, string> = {
   minimalist: "Minimalist",
-  modern: "Hien dai",
-  tech: "Cong nghe",
+  modern: "Hiện đại",
+  tech: "Công nghệ",
   gaming: "Gaming",
-  professional: "Chuyen nghiep",
-  colorful: "Nhieu mau",
+  professional: "Chuyên nghiệp",
+  colorful: "Nhiều màu",
 };
 
 export default function ImagePromptsPage() {
@@ -80,7 +80,7 @@ export default function ImagePromptsPage() {
         setPrompts(result.data || []);
       }
     } catch {
-      toast.error("Loi khi lay danh sach");
+      toast.error("Lỗi khi lấy danh sách");
     } finally {
       setLoading(false);
     }
@@ -95,9 +95,9 @@ export default function ImagePromptsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Prompt hinh anh</h1>
+          <h1 className="text-2xl font-bold">Prompt hình ảnh</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Quan ly prompt tao hinh anh voi AI
+            Quản lý prompt tạo hình ảnh với AI
           </p>
         </div>
         <Button asChild className="gap-2">
@@ -115,7 +115,7 @@ export default function ImagePromptsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Tim prompt, san pham..."
+                placeholder="Tìm prompt, sản phẩm..."
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -123,9 +123,9 @@ export default function ImagePromptsPage() {
             </div>
             <select className="h-10 px-3 rounded-md border border-input bg-background text-sm"
               value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">Tat ca trang thai</option>
-              <option value="draft">Nhap</option>
-              <option value="published">Da dang</option>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="draft">Nháp</option>
+              <option value="published">Đã đăng</option>
             </select>
             <Button variant="outline" size="icon" onClick={fetchPrompts}>
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -157,7 +157,7 @@ export default function ImagePromptsPage() {
               ) : prompts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Khong co prompt nao
+                    Không có prompt nào
                   </TableCell>
                 </TableRow>
               ) : (
@@ -180,7 +180,7 @@ export default function ImagePromptsPage() {
                               <ImageIcon className="size-5 text-muted-foreground" />
                             </div>
                           )}
-                          <p className="text-xs font-medium truncate">{prompt.title || "(Khong co tieu de)"}</p>
+                          <p className="text-xs font-medium truncate">{prompt.title || "(Không có tiêu đề)"}</p>
                           <p className="text-xs text-muted-foreground">{formatDate(prompt.created_at)}</p>
                         </div>
                       </TableCell>
@@ -209,7 +209,7 @@ export default function ImagePromptsPage() {
                             onClick={() => {
                               if (prompt.content_body) {
                                 navigator.clipboard.writeText(prompt.content_body);
-                                toast.success("Da copy prompt!");
+                                toast.success("Đã copy prompt!");
                               }
                             }}>
                             <Copy className="size-3.5" />
@@ -231,17 +231,17 @@ export default function ImagePromptsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ImageIcon className="size-5 text-purple-600" />
-              {viewPrompt?.title || "Prompt hinh anh"}
+              {viewPrompt?.title || "Prompt hình ảnh"}
             </DialogTitle>
             <DialogDescription>
-              {viewPrompt?.product_name && `San pham: ${viewPrompt.product_name}`}
+              {viewPrompt?.product_name && `Sản phẩm: ${viewPrompt.product_name}`}
             </DialogDescription>
           </DialogHeader>
           {viewPrompt && (
             <div className="space-y-4 py-4">
               <div className="flex gap-2 flex-wrap">
                 <Badge variant="outline">
-                  {STYLE_CONFIG[viewPrompt.metadata?.style as string || "modern"] || "Hien dai"}
+                  {STYLE_CONFIG[viewPrompt.metadata?.style as string || "modern"] || "Hiện đại"}
                 </Badge>
                 <Badge variant="outline">{(viewPrompt.metadata?.aspect_ratio as string) || "1:1"}</Badge>
                 {viewPrompt.generated_by && <Badge>AI: {viewPrompt.generated_by}</Badge>}
@@ -249,13 +249,13 @@ export default function ImagePromptsPage() {
               <div>
                 <p className="text-sm font-medium mb-2">Prompt:</p>
                 <div className="bg-muted/50 rounded-lg p-4 whitespace-pre-wrap text-sm font-mono max-h-[300px] overflow-y-auto">
-                  {viewPrompt.content_body || "(Khong co prompt)"}
+                  {viewPrompt.content_body || "(Không có prompt)"}
                 </div>
                 {viewPrompt.content_body && (
                   <Button className="mt-2" size="sm"
                     onClick={() => {
                       navigator.clipboard.writeText(viewPrompt.content_body!);
-                      toast.success("Da copy prompt!");
+                      toast.success("Đã copy prompt!");
                     }}>
                     <Copy className="mr-2 size-3" />Copy prompt
                   </Button>
@@ -272,7 +272,7 @@ export default function ImagePromptsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewPrompt(null)}>Dong</Button>
+            <Button variant="outline" onClick={() => setViewPrompt(null)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

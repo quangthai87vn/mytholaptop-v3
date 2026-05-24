@@ -88,6 +88,7 @@ export interface AdaptedProduct {
   status: string;
   image: string;
   tags: string[];
+  description?: string;
   metadata?: Record<string, string>;
   rawProduct: MedusaProduct;
   /** ISO date string from Medusa created_at */
@@ -283,6 +284,7 @@ export function adaptProduct(
     status: p.status || "draft",
     image: resolveImageUrlForDisplay(p.thumbnail || p.images?.[0]?.url),
     tags,
+    description: p.description || meta?.wordpress_description || "",
     metadata: meta,
     rawProduct: p,
     createdAt: p.created_at,

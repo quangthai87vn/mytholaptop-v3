@@ -1,6 +1,9 @@
-import { loadEnv, defineConfig } from '@medusajs/framework/utils'
+import { QUOTE_MODULE } from "./src/modules/quote";
+import { APPROVAL_MODULE } from "./src/modules/approval";
+import { COMPANY_MODULE } from "./src/modules/company";
+import { loadEnv, defineConfig } from "@medusajs/framework/utils";
 
-loadEnv(process.env.NODE_ENV || 'development', process.cwd())
+loadEnv(process.env.NODE_ENV || "development", process.cwd());
 
 module.exports = defineConfig({
   projectConfig: {
@@ -11,6 +14,17 @@ module.exports = defineConfig({
       authCors: process.env.AUTH_CORS!,
       jwtSecret: process.env.JWT_SECRET || "supersecret",
       cookieSecret: process.env.COOKIE_SECRET || "supersecret",
-    }
-  }
-})
+    },
+  },
+  modules: {
+    [COMPANY_MODULE]: {
+      resolve: "./modules/company",
+    },
+    [QUOTE_MODULE]: {
+      resolve: "./modules/quote",
+    },
+    [APPROVAL_MODULE]: {
+      resolve: "./modules/approval",
+    },
+  },
+});

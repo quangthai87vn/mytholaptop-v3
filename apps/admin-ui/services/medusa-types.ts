@@ -27,6 +27,9 @@ export interface PaginatedResponse<T> {
   product_category?: T[];
   product_tags?: T[];
   tags?: T[];
+  product_types?: T[];
+  product_collections?: T[];
+  collections?: T[];
   orders?: T[];
   order?: T[];
   customers?: T[];
@@ -522,6 +525,68 @@ export interface CreateUserInput {
 export interface InviteUserInput {
   user: string;
   role: "member" | "admin" | "developer";
+}
+
+// ============================================================
+// COLLECTION (BRAND) TYPES
+// ============================================================
+
+export interface MedusaCollection {
+  id: string;
+  title: string;
+  handle: string;
+  description?: string;
+  thumbnail?: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CollectionFilter {
+  limit?: number;
+  offset?: number;
+  fields?: string;
+  expand?: string;
+  q?: string;
+}
+
+export interface CreateCollectionInput {
+  title: string;
+  handle?: string;
+  description?: string;
+  thumbnail?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateCollectionInput extends Partial<CreateCollectionInput> {}
+
+// ============================================================
+// PRODUCT TYPE (ATTRIBUTE) TYPES
+// ============================================================
+
+export interface MedusaProductType {
+  id: string;
+  value: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductTypeFilter {
+  limit?: number;
+  offset?: number;
+  fields?: string;
+  q?: string;
+}
+
+export interface CreateProductTypeInput {
+  value: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateProductTypeInput {
+  value?: string;
+  metadata?: Record<string, unknown>;
 }
 
 // ============================================================

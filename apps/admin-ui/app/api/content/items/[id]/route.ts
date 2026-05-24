@@ -20,12 +20,12 @@ export async function GET(
     const { id } = await params;
     const item = await getContentItemById(parseInt(id, 10));
     if (!item) {
-      return NextResponse.json({ error: "Khong tim thay noi dung" }, { status: 404 });
+      return NextResponse.json({ error: "Không tìm thấy nội dung" }, { status: 404 });
     }
     return NextResponse.json({ data: item });
   } catch (err) {
     console.error("[Content Item GET]", err);
-    return NextResponse.json({ error: "Loi khi lay noi dung" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi lấy nội dung" }, { status: 500 });
   }
 }
 
@@ -38,12 +38,12 @@ export async function PUT(
     const body = await req.json();
     const updated = await updateContentItem(parseInt(id, 10), body);
     if (!updated) {
-      return NextResponse.json({ error: "Khong tim thay noi dung" }, { status: 404 });
+      return NextResponse.json({ error: "Không tìm thấy nội dung" }, { status: 404 });
     }
     return NextResponse.json({ data: updated });
   } catch (err) {
     console.error("[Content Item PUT]", err);
-    return NextResponse.json({ error: "Loi khi cap nhat noi dung" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi cập nhật nội dung" }, { status: 500 });
   }
 }
 
@@ -55,11 +55,11 @@ export async function DELETE(
     const { id } = await params;
     const deleted = await deleteContentItem(parseInt(id, 10));
     if (!deleted) {
-      return NextResponse.json({ error: "Khong tim thay noi dung" }, { status: 404 });
+      return NextResponse.json({ error: "Không tìm thấy nội dung" }, { status: 404 });
     }
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[Content Item DELETE]", err);
-    return NextResponse.json({ error: "Loi khi xoa noi dung" }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi xóa nội dung" }, { status: 500 });
   }
 }

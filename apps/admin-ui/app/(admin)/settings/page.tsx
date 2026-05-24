@@ -12,6 +12,7 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
+  Palette,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,11 +20,14 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { defaultSettings } from "@/lib/mock-data";
 import { loadSettings, saveSettings } from "@/lib/settings-storage";
 import { saveCompanySettings } from "@/lib/company-settings";
+import { BrandVoiceEditor } from "@/components/ai/BrandVoiceEditor";
 import type { Settings } from "@/types";
+import type { BrandVoice, BrandPreset } from "@/types/ai-operating";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -34,12 +38,71 @@ export default function SettingsPage() {
   const [isFetchingToken, setIsFetchingToken] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Brand voices state
+  const [brandVoices, setBrandVoices] = useState<BrandVoice[]>([]);
+  const [activeBrandPreset, setActiveBrandPreset] = useState<BrandPreset | null>(null);
+  const [savingBV, setSavingBV] = useState(false);
+  const [activatingBV, setActivatingBV] = useState(false);
+
   // Load settings from server on mount
   useEffect(() => {
     loadSettings().then((s) => {
       setSettings(s);
       setIsLoaded(true);
     });
+  }, []);
+
+  // Load brand voices
+  useEffect(() => {
+    if (!isLoaded) return;
+    Promise.all([
+      fetch("/api/ai/brand-voices").then((r) => r.json()),
+    ]).then(([bvData]) => {
+      const voices = (bvData.data || []) as BrandVoice[];
+      setBrandVoices(voices);
+      const active = voices.find((v) => v.is_active);
+      if (active) setActiveBrandPreset(active.preset as BrandPreset);
+    });
+  }, [isLoaded]);
+
+  // Save brand voice
+  const handleSaveBrandVoice = useCallback(async (preset: BrandPreset, data: Partial<BrandVoice>) => {
+    setSavingBV(true);
+    try {
+      const res = await fetch("/api/ai/brand-voices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preset, ...data }),
+      });
+      if (res.ok) {
+        const { data: saved } = await res.json() as { data: BrandVoice };
+        setBrandVoices((prev) => prev.map((b) => (b.preset === preset ? saved : b)));
+        toast.success("Đã lưu brand voice!");
+      }
+    } finally {
+      setSavingBV(false);
+    }
+  }, []);
+
+  // Activate brand voice
+  const handleActivateBrandVoice = useCallback(async (preset: BrandPreset) => {
+    setActivatingBV(true);
+    try {
+      const res = await fetch("/api/ai/brand-voices/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preset }),
+      });
+      if (res.ok) {
+        setActiveBrandPreset(preset);
+        setBrandVoices((prev) =>
+          prev.map((b) => ({ ...b, is_active: b.preset === preset }))
+        );
+        toast.success("Đã kích hoạt brand voice!");
+      }
+    } finally {
+      setActivatingBV(false);
+    }
   }, []);
 
   const toggleSecret = (key: string) => {
@@ -179,6 +242,10 @@ export default function SettingsPage() {
           <TabsTrigger value="medusa">
             <Database className="mr-2 size-4" />
             Medusa
+          </TabsTrigger>
+          <TabsTrigger value="brand">
+            <Palette className="mr-2 size-4" />
+            Brand Presets
           </TabsTrigger>
         </TabsList>
 
@@ -444,6 +511,18 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Brand Presets */}
+        <TabsContent value="brand">
+          <BrandVoiceEditor
+            voices={brandVoices}
+            activePreset={activeBrandPreset}
+            onActivate={handleActivateBrandVoice}
+            onSave={handleSaveBrandVoice}
+            activating={activatingBV}
+            saving={savingBV}
+          />
         </TabsContent>
 
       </Tabs>

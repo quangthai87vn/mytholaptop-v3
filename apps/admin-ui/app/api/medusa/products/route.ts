@@ -14,37 +14,57 @@ async function getMedusaConfig() {
     const raw = await fs.readFile(settingsPath, "utf-8");
     const settings = JSON.parse(raw);
     return {
-      url: settings.medusa?.url || "http://localhost:9000",
-      token: settings.medusa?.token || "",
+      url: settings.medusa?.backendUrl || settings.medusa?.url || "http://localhost:9000",
+      jwtToken: settings.medusa?.adminApiKey?.startsWith("eyJ")
+        ? settings.medusa.adminApiKey
+        : undefined,
+      email: settings.medusa?.adminEmail || "",
+      password: settings.medusa?.adminPassword || "",
     };
-  } catch {
+  } catch (err) {
+    console.error("[Medusa Products] Cannot read settings.json:", err);
     return {
       url: "http://localhost:9000",
-      token: "",
+      jwtToken: undefined,
+      email: "",
+      password: "",
     };
   }
 }
 
-async function getMedusaToken(url: string) {
-  try {
-    const settingsPath = path.join(process.cwd(), "data", "settings.json");
-    const raw = await fs.readFile(settingsPath, "utf-8");
-    const settings = JSON.parse(raw);
-    if (settings.medusa?.email && settings.medusa?.password) {
-      const res = await fetch(`${url}/admin/auth/token`, {
+async function authenticateWithMedusa(url: string, email: string, password: string) {
+  const authEndpoints = [
+    "/admin/auth/user/emailpass",
+    "/auth/user/emailpass",
+    "/admin/auth",
+  ];
+
+  for (const authPath of authEndpoints) {
+    try {
+      const fullUrl = `${url.replace(/\/$/, "")}${authPath}`;
+      const response = await fetch(fullUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: settings.medusa.email,
-          password: settings.medusa.password,
-        }),
+        body: JSON.stringify({ email, password, scope: "admin" }),
+        signal: AbortSignal.timeout(8000),
       });
-      if (res.ok) {
-        const data = await res.json();
-        return data.token;
+
+      if (response.ok) {
+        const data = await response.json() as {
+          access_token?: string;
+          token?: string;
+          expires_at?: number;
+        };
+        const token = data.access_token || data.token || "";
+        if (token) {
+          console.log(`[Medusa Products] Authenticated via ${authPath}`);
+          return token;
+        }
       }
+    } catch (err) {
+      console.warn(`[Medusa Products] Auth attempt ${authPath} failed:`, err);
     }
-  } catch { /* ignore */ }
+  }
   return null;
 }
 
@@ -55,19 +75,18 @@ export async function GET(req: NextRequest) {
     const offset = searchParams.get("offset") || "0";
     const q = searchParams.get("q") || "";
 
-    const { url, token } = await getMedusaConfig();
+    const { url, jwtToken, email, password } = await getMedusaConfig();
+    console.log(`[Medusa Products] Config loaded — url=${url}, hasJwt=${!!jwtToken}, hasCreds=${!!(email && password)}`);
 
-    // Try existing token first
-    let authToken = token;
+    let authToken = jwtToken;
 
-    // If no token, try to get one
-    if (!authToken) {
-      authToken = await getMedusaToken(url);
+    if (!authToken && email && password) {
+      authToken = await authenticateWithMedusa(url, email, password);
     }
 
     if (!authToken) {
       return NextResponse.json(
-        { error: "Chua cau hinh Medusa. Vui long cau hinh Medusa truoc." },
+        { error: "Chưa cấu hình Medusa. Vui lòng cấu hình Medusa trước." },
         { status: 401 }
       );
     }
@@ -82,20 +101,20 @@ export async function GET(req: NextRequest) {
         Authorization: `Bearer ${authToken}`,
         "Content-Type": "application/json",
       },
-      next: { revalidate: 30 }, // cache 30s
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
       if (res.status === 401) {
-        // Try refreshing token
-        const newToken = await getMedusaToken(url);
+        console.warn("[Medusa Products] Token expired, re-authenticating...");
+        const newToken = await authenticateWithMedusa(url, email, password);
         if (newToken) {
           const retryRes = await fetch(endpoint, {
             headers: {
               Authorization: `Bearer ${newToken}`,
               "Content-Type": "application/json",
             },
-            next: { revalidate: 30 },
+            signal: AbortSignal.timeout(10000),
           });
           if (retryRes.ok) {
             const data = await retryRes.json();
@@ -107,9 +126,17 @@ export async function GET(req: NextRequest) {
             });
           }
         }
-        return NextResponse.json({ error: "Het han xac thuc Medusa" }, { status: 401 });
+        return NextResponse.json(
+          { error: "Hết hạn xác thực Medusa. Vui lòng cấu hình lại trong Settings." },
+          { status: 401 }
+        );
       }
-      return NextResponse.json({ error: `Loi Medusa: ${res.status}` }, { status: 502 });
+      const errData = await res.json().catch(() => ({}));
+      console.error(`[Medusa Products] API error ${res.status}:`, errData);
+      return NextResponse.json(
+        { error: errData.message || errData.error || `Lỗi Medusa: ${res.status}` },
+        { status: 502 }
+      );
     }
 
     const data = await res.json();
@@ -120,7 +147,8 @@ export async function GET(req: NextRequest) {
       offset: parseInt(offset),
     });
   } catch (err) {
-    console.error("[Medusa Products GET]", err);
-    return NextResponse.json({ error: "Loi khi lay danh sach san pham" }, { status: 500 });
+    console.error("[Medusa Products GET] Unhandled error:", err);
+    const message = err instanceof Error ? err.message : "Lỗi khi lấy danh sách sản phẩm";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
