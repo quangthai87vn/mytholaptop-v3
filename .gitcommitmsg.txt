@@ -1,0 +1,5 @@
+﻿docs: add comprehensive README and Build guide
+
+- Add README.md with full project architecture, features, and quick start
+- Add Build.md with detailed Docker deployment guide
+- Add health check, Nginx, SSL, and troubleshooting sections
