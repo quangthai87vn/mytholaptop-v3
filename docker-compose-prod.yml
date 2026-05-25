@@ -6,11 +6,8 @@ networks:
 
 services:
   backend:
-    build:
-      context: ./apps/backend-ui
-      dockerfile: apps/backend/Dockerfile
-    container_name: mtl-backend
     image: quangthai87/mytholaptopv3:backend-latest
+    container_name: mtl-backend
     networks:
       - mtl-network
     environment:
@@ -22,6 +19,7 @@ services:
       AUTH_CORS: ${AUTH_CORS:-http://localhost:7003,http://localhost:7004,https://admin.mtl.vn}
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECRET: ${COOKIE_SECRET}
+      AUTH_COOKIE_SECURE: "false"
       PORT: 9000
     expose:
       - "9000"
@@ -41,11 +39,8 @@ services:
     restart: unless-stopped
 
   admin-ui:
-    build:
-      context: ./apps/admin-ui
-      dockerfile: Dockerfile
-    container_name: mtl-admin
     image: quangthai87/mytholaptopv3:admin-ui-latest
+    container_name: mtl-admin
     networks:
       - mtl-network
     environment:
