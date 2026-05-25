@@ -3,6 +3,7 @@
  */
 
 import { query } from "@/lib/db";
+import { getCacheOrFetch, invalidateAICache } from "./cache";
 
 export interface PromptRule {
   id: number;
@@ -21,21 +22,23 @@ export interface PromptRulesConfig {
 }
 
 export async function getPromptRules(): Promise<PromptRulesConfig> {
-  const { rows } = await query<PromptRule>(
-    "SELECT * FROM ai_prompt_rules ORDER BY scope, priority DESC"
-  );
+  return getCacheOrFetch("ai:prompt-rules", async () => {
+    const { rows } = await query<PromptRule>(
+      "SELECT * FROM ai_prompt_rules ORDER BY scope, priority DESC"
+    );
 
-  const global_rules = rows.filter((r) => r.scope === "global");
-  const platform_rules: Record<string, PromptRule[]> = {};
+    const global_rules = rows.filter((r) => r.scope === "global");
+    const platform_rules: Record<string, PromptRule[]> = {};
 
-  for (const row of rows.filter((r) => r.scope === "platform")) {
-    if (!platform_rules[row.platform!]) {
-      platform_rules[row.platform!] = [];
+    for (const row of rows.filter((r) => r.scope === "platform")) {
+      if (!platform_rules[row.platform!]) {
+        platform_rules[row.platform!] = [];
+      }
+      platform_rules[row.platform!].push(row);
     }
-    platform_rules[row.platform!].push(row);
-  }
 
-  return { global_rules, platform_rules };
+    return { global_rules, platform_rules };
+  });
 }
 
 export async function upsertPromptRule(data: {
@@ -63,6 +66,7 @@ export async function upsertPromptRule(data: {
       data.is_active ?? true,
     ]
   );
+  invalidateAICache();
   return rows[0];
 }
 
@@ -71,6 +75,7 @@ export async function deletePromptRule(id: number): Promise<boolean> {
     "DELETE FROM ai_prompt_rules WHERE id = $1",
     [id]
   );
+  invalidateAICache();
   return (rowCount ?? 0) > 0;
 }
 
@@ -82,5 +87,6 @@ export async function togglePromptRule(
     "UPDATE ai_prompt_rules SET is_active = $1 WHERE id = $2 RETURNING *",
     [isActive, id]
   );
+  invalidateAICache();
   return rows[0] || null;
 }

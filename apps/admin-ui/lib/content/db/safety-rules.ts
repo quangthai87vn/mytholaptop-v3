@@ -3,6 +3,7 @@
  */
 
 import { query } from "@/lib/db";
+import { getCacheOrFetch, invalidateAICache } from "./cache";
 
 export interface SafetyRule {
   id: number;
@@ -23,10 +24,12 @@ export interface SafetyConfig {
 }
 
 export async function getSafetyRules(): Promise<SafetyRule[]> {
-  const { rows } = await query<SafetyRule>(
-    "SELECT * FROM ai_safety_rules ORDER BY severity DESC, id ASC"
-  );
-  return rows;
+  return getCacheOrFetch("ai:safety-rules", async () => {
+    const { rows } = await query<SafetyRule>(
+      "SELECT * FROM ai_safety_rules ORDER BY severity DESC, id ASC"
+    );
+    return rows;
+  });
 }
 
 export async function upsertSafetyRule(data: {
@@ -45,6 +48,7 @@ export async function upsertSafetyRule(data: {
      RETURNING *`,
     [data.rule_key, data.rule_text, data.severity ?? "medium", data.is_active ?? true]
   );
+  invalidateAICache();
   return rows[0];
 }
 
@@ -53,6 +57,7 @@ export async function deleteSafetyRule(id: number): Promise<boolean> {
     "DELETE FROM ai_safety_rules WHERE id = $1",
     [id]
   );
+  invalidateAICache();
   return (rowCount ?? 0) > 0;
 }
 
@@ -64,6 +69,7 @@ export async function toggleSafetyRule(
     "UPDATE ai_safety_rules SET is_active = $1 WHERE id = $2 RETURNING *",
     [isActive, id]
   );
+  invalidateAICache();
   return rows[0] || null;
 }
 

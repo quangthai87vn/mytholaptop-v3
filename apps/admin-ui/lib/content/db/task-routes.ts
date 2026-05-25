@@ -11,6 +11,7 @@
  */
 
 import { query } from "@/lib/db";
+import { getCacheOrFetch, invalidateAICache } from "./cache";
 import type {
   TaskRoute,
   TaskRouteInput,
@@ -24,10 +25,12 @@ import type { AIProvider } from "@/lib/content/types";
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export async function getAllTaskRoutes(): Promise<TaskRoute[]> {
-  const { rows } = await query<TaskRoute>(
-    "SELECT * FROM ai_task_routes ORDER BY priority ASC"
-  );
-  return rows;
+  return getCacheOrFetch("ai:routing-rules", async () => {
+    const { rows } = await query<TaskRoute>(
+      "SELECT * FROM ai_task_routes ORDER BY priority ASC"
+    );
+    return rows;
+  });
 }
 
 export async function getTaskRouteByType(
@@ -79,6 +82,7 @@ export async function upsertTaskRoute(
       data.is_active ?? true,
     ]
   );
+  invalidateAICache();
   return rows[0];
 }
 
@@ -151,35 +155,36 @@ function mapRowToRoutingRule(row: Record<string, unknown>): RoutingRule {
  * falls back to old columns (provider_type slug) for backward compat.
  */
 export async function getAllRoutingRules(): Promise<RoutingRule[]> {
-  const hasNew = await checkNewSchema();
+  return getCacheOrFetch("ai:routing-rules", async () => {
+    const hasNew = await checkNewSchema();
 
-  if (!hasNew) {
-    // Fall back to legacy
-    const rows = await getAllTaskRoutes();
-    return rows.map((r) => ({
-      id: r.id,
-      task_type: r.task_type,
-      task_label: r.task_label,
-      primary_provider_id: null,
-      primary_model_override: r.model_name || null,
-      fallback_provider_id: null,
-      fallback_model_override: r.fallback_model_name || null,
-      temperature_override: r.temperature !== 0.7 ? r.temperature : null,
-      max_tokens_override: r.max_tokens !== 2048 ? r.max_tokens : null,
-      top_p_override: null,
-      priority: r.priority,
-      system_prompt_id: r.system_prompt_id ?? null,
-      brand_preset: r.brand_preset ?? null,
-      is_active: r.is_active,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-    }));
-  }
+    if (!hasNew) {
+      const rows = await getAllTaskRoutes();
+      return rows.map((r) => ({
+        id: r.id,
+        task_type: r.task_type,
+        task_label: r.task_label,
+        primary_provider_id: null,
+        primary_model_override: r.model_name || null,
+        fallback_provider_id: null,
+        fallback_model_override: r.fallback_model_name || null,
+        temperature_override: r.temperature !== 0.7 ? r.temperature : null,
+        max_tokens_override: r.max_tokens !== 2048 ? r.max_tokens : null,
+        top_p_override: null,
+        priority: r.priority,
+        system_prompt_id: r.system_prompt_id ?? null,
+        brand_preset: r.brand_preset ?? null,
+        is_active: r.is_active,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      }));
+    }
 
-  const { rows } = await query<Record<string, unknown>>(
-    "SELECT * FROM ai_task_routes ORDER BY priority ASC"
-  );
-  return rows.map(mapRowToRoutingRule);
+    const { rows } = await query<Record<string, unknown>>(
+      "SELECT * FROM ai_task_routes ORDER BY priority ASC"
+    );
+    return rows.map(mapRowToRoutingRule);
+  });
 }
 
 /**
@@ -383,6 +388,7 @@ export async function toggleRoutingRuleActive(
       `UPDATE ai_task_routes SET is_active = $1, updated_at = NOW() WHERE task_type = $2`,
       [isActive, taskType]
     );
+    invalidateAICache();
     return getRoutingRuleByType(taskType);
   }
 
@@ -390,6 +396,7 @@ export async function toggleRoutingRuleActive(
     `UPDATE ai_task_routes SET is_active = $1, updated_at = NOW() WHERE task_type = $2 RETURNING *`,
     [isActive, taskType]
   );
+  invalidateAICache();
   if (!rows[0]) return null;
   return mapRowToRoutingRule(rows[0]);
 }
