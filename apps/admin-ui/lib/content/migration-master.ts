@@ -749,8 +749,45 @@ async function phase6_addon(client: any) {
   console.log("  + ai_prompt_rules unique constraint");
 }
 
-// ── Phase 7: Seed Data ─────────────────────────────────────────────────────────
-async function phase7_seed(client: any) {
+// ── Phase 7: App Settings (WooCommerce + Medusa credentials) ───────────────────
+async function phase7_appSettings(client: any) {
+  console.log("\n[PHASE 7] App Settings...");
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      id          SERIAL PRIMARY KEY,
+      key         VARCHAR(100) NOT NULL UNIQUE,
+      value       TEXT NOT NULL,
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  console.log("  + app_settings");
+
+  await ensureIndex(client, "app_settings", "idx_app_settings_key",
+    "CREATE UNIQUE INDEX idx_app_settings_key ON app_settings(key)");
+  console.log("  + index: idx_app_settings_key");
+
+  // Seed default app settings
+  await client.query(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES ('wooCommerce', '{"wordpressUrl":"","consumerKey":"","consumerSecret":""}', NOW())
+    ON CONFLICT (key) DO NOTHING
+  `);
+  await client.query(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES ('medusa', '{"backendUrl":"","adminEmail":"","adminPassword":"","adminApiKey":""}', NOW())
+    ON CONFLICT (key) DO NOTHING
+  `);
+  await client.query(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES ('company', '{"name":"","website":"","phone":"","logoUrl":"","address":""}', NOW())
+    ON CONFLICT (key) DO NOTHING
+  `);
+  console.log("  + seed: app_settings defaults (wooCommerce, medusa, company)");
+}
+
+// ── Phase 8: Seed Data ─────────────────────────────────────────────────────────
+async function phase8_seed(client: any) {
   console.log("\n[PHASE 7] Seeding Data...");
 
   // ── Seed provider groups ─────────────────────────────────────────────────────
@@ -1113,7 +1150,8 @@ async function main() {
     await phase4_routingFK(client);
     await phase5_migrationState(client);
     await phase6_addon(client);
-    await phase7_seed(client);
+    await phase7_appSettings(client);
+    await phase8_seed(client);
 
     await client.query("COMMIT");
   } catch (err) {
@@ -1136,6 +1174,7 @@ async function main() {
   console.log("  Routing FK:      0 bảng + 2 indexes  + ALTER ai_task_routes");
   console.log("  Migration State: 4 bảng + 9 indexes  + triggers");
   console.log("  Addon:           1 bảng");
+  console.log("  App Settings:    1 bảng + 1 index + seed defaults");
   console.log("  Seed:            providers, models, channels, templates,");
   console.log("                   brand voices, routing, prompts, safety rules");
   console.log("");
