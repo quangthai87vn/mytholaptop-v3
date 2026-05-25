@@ -17,9 +17,9 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
-      STORE_CORS: ${STORE_CORS:-http://localhost:8000,http://localhost:7004,https://admin.mtl.vn}
-      ADMIN_CORS: ${ADMIN_CORS:-https://admin.mtl.vn,http://localhost:7004,https://backend.mtl.vn}
-      AUTH_CORS: ${AUTH_CORS:-https://admin.mtl.vn,https://backend.mtl.vn}
+      STORE_CORS: ${STORE_CORS:-http://localhost:7004,https://admin.mtl.vn}
+      ADMIN_CORS: ${ADMIN_CORS:-http://localhost:7003,http://localhost:7004,https://admin.mtl.vn}
+      AUTH_CORS: ${AUTH_CORS:-http://localhost:7003,http://localhost:7004,https://admin.mtl.vn}
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECRET: ${COOKIE_SECRET}
       PORT: 9000
