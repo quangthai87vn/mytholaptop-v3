@@ -14,6 +14,29 @@ interface CachedToken {
 
 const tokenCache = new Map<string, CachedToken>();
 
+/**
+ * Normalize backend URL - handle Docker hostnames when running outside Docker.
+ * Docker uses internal hostnames like "backend", "medusa" that don't resolve locally.
+ */
+function normalizeBackendUrl(url: string): string {
+  let normalized = url.replace(/\/$/, "");
+
+  // Handle Docker internal hostnames when running outside Docker
+  const dockerHostnames = ["backend", "medusa-backend", "medusa", "postgres", "redis"];
+  for (const hostname of dockerHostnames) {
+    if (
+      normalized.startsWith(`http://${hostname}:`) ||
+      normalized.startsWith(`https://${hostname}:`)
+    ) {
+      // Replace with localhost for local development
+      normalized = normalized.replace(`://${hostname}:`, `://localhost:`);
+      break;
+    }
+  }
+
+  return normalized;
+}
+
 function getCacheKey(backendUrl: string, email: string): string {
   return `${backendUrl}::${email}`;
 }
@@ -78,6 +101,9 @@ async function authenticateWithMedusa(
     return cached.token;
   }
 
+  // Normalize URL - handle Docker hostnames in dev mode
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+
   // Try multiple auth endpoints (Medusa v2 uses different paths)
   const authEndpoints = [
     "/admin/auth/user/emailpass",
@@ -87,7 +113,7 @@ async function authenticateWithMedusa(
 
   for (const authPath of authEndpoints) {
     try {
-      const url = `${backendUrl.replace(/\/$/, "")}${authPath}`;
+      const url = `${normalizedUrl}${authPath}`;
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -172,7 +198,7 @@ async function proxyRequest(
   // Priority 2: Use JWT token passed as adminApiKey (if eyJ... format)
   // Priority 3: Authenticate with email/password (fallback)
   let authToken = "";
-  let actualBackendUrl = backendUrlParam;
+  let actualBackendUrl = normalizeBackendUrl(backendUrlParam);
 
   // Load server-side credentials
   const serverCreds = await loadServerCredentials();

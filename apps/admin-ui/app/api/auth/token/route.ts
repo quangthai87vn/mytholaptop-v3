@@ -1,5 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function normalizeBackendUrl(url: string): string {
+  let normalized = url.replace(/\/$/, "");
+
+  // Handle Docker internal hostnames when running outside Docker
+  // These hostnames only work inside Docker containers
+  const dockerHostnames = ["backend", "medusa-backend", "medusa"];
+  for (const hostname of dockerHostnames) {
+    if (
+      normalized.startsWith(`http://${hostname}:`) ||
+      normalized.startsWith(`https://${hostname}:`)
+    ) {
+      // Replace with localhost for local development
+      normalized = normalized.replace(
+        `://${hostname}:`,
+        `://localhost:`
+      );
+      break;
+    }
+  }
+
+  return normalized;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -12,7 +35,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const url = `${backendUrl.replace(/\/$/, "")}/auth/user/emailpass`;
+    // Normalize URL - handle Docker hostnames in dev mode
+    const normalizedUrl = normalizeBackendUrl(backendUrl);
+    const url = `${normalizedUrl}/auth/user/emailpass`;
 
     const response = await fetch(url, {
       method: "POST",

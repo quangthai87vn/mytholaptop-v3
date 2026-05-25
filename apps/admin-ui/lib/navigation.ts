@@ -40,6 +40,12 @@ import {
   FileText as FileTextIcon,
   ClipboardList,
   type LucideIcon,
+  FolderKanban,
+  Target,
+  CheckSquare,
+  Clapperboard,
+  GraduationCap,
+  Kanban,
 } from "lucide-react";
 
 export interface NavItem {
@@ -288,6 +294,53 @@ export const NAV_ITEMS: NavItem[] = [
         title: "Phân quyền",
         href: "/staff/permissions",
         icon: Settings,
+      },
+    ],
+  },
+  {
+    title: "Quản lý Dự án",
+    href: "/workspace",
+    icon: FolderKanban,
+    children: [
+      {
+        title: "Tổng quan Workspace",
+        href: "/workspace",
+        icon: LayoutDashboard,
+      },
+      {
+        title: "Dự án",
+        href: "/projects",
+        icon: Target,
+      },
+      {
+        title: "Chiến dịch",
+        href: "/campaigns",
+        icon: Zap,
+      },
+      {
+        title: "Công việc",
+        href: "/tasks",
+        icon: CheckSquare,
+      },
+      {
+        title: "Media Workflow",
+        href: "/media-workflow",
+        icon: Clapperboard,
+      },
+      {
+        title: "Thực tập sinh",
+        href: "/interns",
+        icon: GraduationCap,
+      },
+      {
+        title: "Lịch làm việc",
+        href: "/workspace/calendar",
+        icon: Calendar,
+      },
+      {
+        title: "Hoạt động",
+        href: "/workspace/activity",
+        icon: Activity,
       },
     ],
   },

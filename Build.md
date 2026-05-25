@@ -75,7 +75,7 @@ mkdir -p /opt/mtl-commerce
 cd /opt/mtl-commerce
 
 # Clone repository
-git clone https://github.com/quangthai87vn/mytholaptop-v3.git .
+git clone https://github.com/quangthai87/mytholaptop-v3.git .
 git checkout main
 ```
 

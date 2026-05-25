@@ -5,18 +5,19 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
+    "dev": "cd apps/backend && medusa develop",
+    "dev:storefront": "cd apps/storefront && next dev",
+    "build": "pnpm --filter @medusa-project/medusa build && pnpm --filter storefront build",
+    "build:backend": "cd apps/backend && medusa build",
+    "build:storefront": "cd apps/storefront && next build",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "test:integration:http": "turbo run test:integration:http",
     "test:integration:modules": "turbo run test:integration:modules",
     "test:unit": "turbo run test:unit",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "rm -rf node_modules && cd apps/backend && rm -rf .medusa node_modules && cd ../storefront && rm -rf .next node_modules"
   },
-  "devDependencies": {
-    "turbo": "^2.3.3"
-  },
+  "devDependencies": {},
   "pnpm": {
     "overrides": {
       "@types/react": "19.0.5",

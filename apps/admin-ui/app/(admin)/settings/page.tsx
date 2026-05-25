@@ -243,10 +243,6 @@ export default function SettingsPage() {
             <Database className="mr-2 size-4" />
             Medusa
           </TabsTrigger>
-          <TabsTrigger value="brand">
-            <Palette className="mr-2 size-4" />
-            Brand Presets
-          </TabsTrigger>
         </TabsList>
 
         {/* Company info */}
@@ -511,18 +507,6 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
-
-        {/* Brand Presets */}
-        <TabsContent value="brand">
-          <BrandVoiceEditor
-            voices={brandVoices}
-            activePreset={activeBrandPreset}
-            onActivate={handleActivateBrandVoice}
-            onSave={handleSaveBrandVoice}
-            activating={activatingBV}
-            saving={savingBV}
-          />
         </TabsContent>
 
       </Tabs>
