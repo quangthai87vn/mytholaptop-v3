@@ -27,14 +27,14 @@ Hệ thống B2B e-commerce platform cho Mỹ Tho Laptop, bao gồm Medusa backe
         ▼                              ▼
 ┌───────────────────────┐   ┌───────────────────────┐
 │   Admin UI (Next.js)  │   │   Storefront (Next.js) │
-│   Port: 3000          │   │   Port: 8000 (future) │
+│   Port: 7004          │   │   Port: 8000 (future) │
 └───────────┬───────────┘   └───────────┬───────────┘
             │                           │
             │  REST API                 │  Store API
             ▼                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │               Medusa Backend (Node.js)                       │
-│               Port: 9000                                     │
+│               Port: 7003                                     │
 │  ┌──────────────┬──────────────┬───────────────────────┐  │
 │  │  Admin API   │  Store API   │  Custom Modules       │  │
 │  │  /admin/*    │  /store/*   │  Company, Quote,      │  │
@@ -126,20 +126,247 @@ cp .env.prod.example .env
 pnpm dev
 
 # Hoặc chạy riêng từng app:
-pnpm dev:admin    # Admin UI: http://localhost:3000
-pnpm dev:backend  # Backend: http://localhost:9000
+pnpm dev:admin    # Admin UI: http://localhost:7004
+pnpm dev:backend  # Backend: http://localhost:7003
 ```
+
+---
+
+## Docker Hub Images
+
+Các Docker images đã được publish lên Docker Hub:
+
+```bash
+# Admin UI
+docker pull quangthai87/mytholaptopv3:admin-ui-latest
+
+# Backend (Medusa)
+docker pull quangthai87/mytholaptopv3:backend-latest
+
+# Redis (official image)
+docker pull redis:7-alpine
+```
+
+### Pull và chạy từ Docker Hub (Production với Domain)
+
+```bash
+# 1. SSH vào server
+ssh your-server
+
+# 2. Tạo thư mục project
+mkdir -p mytholaptopv3 && cd mytholaptopv3
+
+# 3. Pull images mới nhất
+docker pull quangthai87/mytholaptopv3:admin-ui-latest
+docker pull quangthai87/mytholaptopv3:backend-latest
+
+# 4. Tạo file docker-compose.yml với network nội bộ
+cat > docker-compose.yml << 'EOF'
+x-project-name: &project_name mtl-commerce-prod
+
+networks:
+  mtl-network:
+    driver: bridge
+
+services:
+  backend:
+    image: quangthai87/mytholaptopv3:backend-latest
+    container_name: mtl-backend
+    networks:
+      - mtl-network
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      STORE_CORS: ${STORE_CORS:-https://admin.mtl.vn}
+      ADMIN_CORS: ${ADMIN_CORS:-https://admin.mtl.vn,https://backend.mtl.vn}
+      AUTH_CORS: ${AUTH_CORS:-https://admin.mtl.vn,https://backend.mtl.vn}
+      JWT_SECRET: ${JWT_SECRET}
+      COOKIE_SECRET: ${COOKIE_SECRET}
+      PORT: 9000
+    expose:
+      - "9000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  admin-ui:
+    image: quangthai87/mytholaptopv3:admin-ui-latest
+    container_name: mtl-admin
+    networks:
+      - mtl-network
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${NEXT_PUBLIC_MEDUSA_BACKEND_URL:-http://backend:9000}
+      DATABASE_URL: ${DATABASE_URL}
+    expose:
+      - "3000"
+    volumes:
+      - ./data/admin:/app/data
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: mtl-redis
+    networks:
+      - mtl-network
+    volumes:
+      - mtl-redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  mtl-redis-data:
+EOF
+
+# 5. Tạo file .env
+cat > .env << 'EOF'
+NODE_ENV=production
+DATABASE_URL=postgresql://user:password@your-postgres-host:5432/mytholaptop
+REDIS_URL=redis://redis:6379
+JWT_SECRET=your-random-secret-min-32-chars
+COOKIE_SECRET=your-random-secret-min-32-chars
+NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://backend.mtl.vn
+EOF
+
+# 6. Chạy containers
+docker compose up -d
+
+# 7. Kiểm tra trạng thái
+docker compose ps
+
+# 8. Xem logs
+docker compose logs -f
+```
+
+**Services (Internal Network):**
+- Backend: `http://backend:9000` (container network)
+- Admin UI: `http://admin-ui:3000` (container network)
+- Redis: `redis://redis:6379` (container network)
+
+**Public URLs (qua Reverse Proxy):**
+- Backend API: `https://backend.mtl.vn`
+- Admin Dashboard: `https://admin.mtl.vn`
+
+---
+
+## Reverse Proxy Setup (Nginx)
+
+Vì containers không expose port ra ngoài, cần reverse proxy để route domain.
+
+### Cài đặt Nginx
+
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install nginx certbot python3-certbot-nginx
+
+# Cấu hình Nginx cho backend.mtl.vn
+sudo nano /etc/nginx/sites-available/backend.mtl.vn
+```
+
+### Cấu hình Nginx
+
+```nginx
+# /etc/nginx/sites-available/backend.mtl.vn
+server {
+    listen 80;
+    server_name backend.mtl.vn;
+
+    location / {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+
+# /etc/nginx/sites-available/admin.mtl.vn
+server {
+    listen 80;
+    server_name admin.mtl.vn;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+### Kích hoạt và restart
+
+```bash
+# Enable sites
+sudo ln -s /etc/nginx/sites-available/backend.mtl.vn /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/admin.mtl.vn /etc/nginx/sites-enabled/
+
+# Test config
+sudo nginx -t
+
+# Restart Nginx
+sudo systemctl restart nginx
+
+# SSL Certificate (Let's Encrypt)
+sudo certbot --nginx -d backend.mtl.vn -d admin.mtl.vn
+```
+
+---
+
+## DNS Configuration
+
+Cần tạo DNS records cho domain:
+
+| Type | Name | Value |
+|------|------|-------|
+| A | backend.mtl.vn | YOUR_SERVER_IP |
+| A | admin.mtl.vn | YOUR_SERVER_IP |
 
 ---
 
 ## Docker Deployment
 
-### Build và chạy
+### Build và chạy (Local Build)
 
 **Yêu cầu:**
 - Docker >= 24.0
 - Docker Compose >= 2.20
 - PostgreSQL external server
+- Reverse Proxy (Nginx) để route domain
 - Server có RAM >= 2GB, Disk >= 5GB
 
 **Các bước:**
@@ -158,13 +385,12 @@ git pull
 cp .env.prod.example .env
 nano .env   # Chỉnh sửa các giá trị:
             # - DATABASE_URL (PostgreSQL external)
-            # - REDIS_URL
             # - JWT_SECRET
             # - COOKIE_SECRET
-            # - NEXT_PUBLIC_MEDUSA_BACKEND_URL
+            # - NEXT_PUBLIC_MEDUSA_BACKEND_URL (https://backend.mtl.vn)
 
 # 4. Build và chạy
-docker compose -f docker-compose-prod.yml --env-file .env up -d --build
+docker compose -f docker-compose-prod.yml --env-file .env up -d
 
 # 5. Kiểm tra trạng thái
 docker compose -f docker-compose-prod.yml ps
@@ -173,10 +399,10 @@ docker compose -f docker-compose-prod.yml ps
 docker compose -f docker-compose-prod.yml logs -f
 ```
 
-**Services:**
-- Admin UI: `http://your-server:3000`
-- Backend: `http://your-server:9000`
-- Redis: `localhost:6379`
+**Services (Internal):**
+- Backend: `http://backend:9000`
+- Admin UI: `http://admin-ui:3000`
+- Redis: `redis://redis:6379`
 
 ### Dùng Deploy Script
 
@@ -249,22 +475,22 @@ NODE_ENV=production
 DATABASE_URL=postgresql://mytholaptop_user:password@postgres-host:5432/mytholaptop
 
 # Redis (Container)
-REDIS_URL=redis://redis:6379
-REDIS_PORT=6379
+REDIS_URL=redis://redis:7005
+REDIS_PORT=7005
 
 # Backend
-BACKEND_PORT=9000
+BACKEND_PORT=7003
 JWT_SECRET=your-random-secret-min-32-chars
 COOKIE_SECRET=your-random-secret-min-32-chars
 
 # CORS
-STORE_CORS=http://localhost:8000,http://localhost:3000
-ADMIN_CORS=http://localhost:3000,https://admin.mtl.vn
-AUTH_CORS=http://localhost:3000,http://localhost:9000,https://admin.mtl.vn
+STORE_CORS=http://localhost:8000,http://localhost:7004
+ADMIN_CORS=http://localhost:7004,https://admin.mtl.vn
+AUTH_CORS=http://localhost:7004,http://localhost:7003,https://admin.mtl.vn
 
 # Admin UI
 NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://backend.mtl.vn
-ADMIN_PORT=3000
+ADMIN_PORT=7004
 ```
 
 ---
@@ -310,8 +536,8 @@ ADMIN_PORT=3000
 
 ```bash
 pnpm dev              # Chạy tất cả apps
-pnpm dev:admin       # Admin UI (port 3000)
-pnpm dev:backend     # Backend (port 9000)
+pnpm dev:admin       # Admin UI (port 7004)
+pnpm dev:backend     # Backend (port 7003)
 pnpm build           # Build tất cả
 pnpm build:admin     # Build admin-ui
 pnpm build:backend   # Build backend

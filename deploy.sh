@@ -26,13 +26,13 @@ DATABASE_URL=${DATABASE_URL}
 REDIS_URL=${REDIS_URL}
 JWT_SECRET=${JWT_SECRET}
 COOKIE_SECRET=${COOKIE_SECRET}
-STORE_CORS=http://localhost:8000,http://localhost:3000
-ADMIN_CORS=http://localhost:5173,http://localhost:3000,https://admin.mtl.vn
-AUTH_CORS=http://localhost:5173,http://localhost:3000,http://localhost:9000,http://127.0.0.1:3000,https://admin.mtl.vn
+STORE_CORS=http://localhost:7004,https://admin.mtl.vn
+ADMIN_CORS=http://localhost:7003,http://localhost:7004,https://admin.mtl.vn
+AUTH_CORS=http://localhost:7003,http://localhost:7004,https://admin.mtl.vn
 NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://backend.mtl.vn
-BACKEND_PORT=9000
-ADMIN_PORT=3000
-REDIS_PORT=6379
+BACKEND_PORT=7003
+ADMIN_PORT=7004
+REDIS_PORT=7005
 EOF
 
 echo ".env.prod created"
@@ -65,5 +65,6 @@ docker compose -f docker-compose-prod.yml logs --tail=20 admin-ui
 
 echo ""
 echo "Done! Services should be available at:"
-echo "  - Backend: http://localhost:9000"
-echo "  - Admin UI: http://localhost:3000"
+echo "  - Backend: http://localhost:7003"
+echo "  - Admin UI: http://localhost:7004"
+echo "  - Redis: localhost:7005"
