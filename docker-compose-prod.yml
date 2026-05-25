@@ -22,9 +22,11 @@ services:
       AUTH_CORS: ${AUTH_CORS:-https://admin.mtl.vn,https://backend.mtl.vn}
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECRET: ${COOKIE_SECRET}
-      PORT: ${BACKEND_PORT:-9000}
+      PORT: 9000
     expose:
       - "9000"
+    ports:
+      - "7003:9000"
     volumes:
       - ./apps/backend-ui/apps/backend:/app/data
     depends_on:
@@ -53,6 +55,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
     expose:
       - "3000"
+    ports:
+      - "7004:3000"
     volumes:
       - ./apps/admin-ui:/app/data
     depends_on:
