@@ -47,6 +47,10 @@ apps/admin-ui/public/uploads
 apps/admin-ui/public/wp-content/*/
 apps/admin-ui/public/wp-content/*
 
+# Public folders (uploaded media - do not commit)
+public/
+apps/admin-ui/public/
+
 # Duplicate/unused folders (do not commit)
 apps/admin-ui/apps/
 apps/apps/
