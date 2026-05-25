@@ -83,7 +83,3 @@ services:
 
 volumes:
   mtl-redis-data:
-
-networks:
-  mtl-network:
-    external: false
