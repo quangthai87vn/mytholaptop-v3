@@ -12,16 +12,16 @@ Write-Host "===== MTL Commerce Deploy =====" -ForegroundColor Cyan
 # --- Config (sửa các giá trị bên dưới nếu cần) ---
 $env:NODE_ENV = "production"
 $env:DATABASE_URL = "postgresql://mytholaptop_user:1Passw0rdphatxitnhat@postgresql.mtl.vn:7000/mytholaptop"
-$env:REDIS_URL = "redis://localhost:6379"
+$env:REDIS_URL = "redis://localhost:7005"
 $env:JWT_SECRET = "supersecret_dev_local_2026"
 $env:COOKIE_SECRET = "supersecret_dev_local_2026"
-$env:STORE_CORS = "http://localhost:8000,http://localhost:3000"
-$env:ADMIN_CORS = "http://localhost:5173,http://localhost:3000,https://admin.mtl.vn"
-$env:AUTH_CORS = "http://localhost:5173,http://localhost:3000,http://localhost:9000,http://127.0.0.1:3000,https://admin.mtl.vn"
-$env:NEXT_PUBLIC_MEDUSA_BACKEND_URL = "http://localhost:9000"
-$env:BACKEND_PORT = "9000"
-$env:ADMIN_PORT = "3000"
-$env:REDIS_PORT = "6379"
+$env:STORE_CORS = "http://localhost:8000,http://localhost:7004"
+$env:ADMIN_CORS = "http://localhost:5173,http://localhost:7004,https://admin.mtl.vn"
+$env:AUTH_CORS = "http://localhost:5173,http://localhost:7004,http://localhost:7003,http://127.0.0.1:7004,https://admin.mtl.vn"
+$env:NEXT_PUBLIC_MEDUSA_BACKEND_URL = "http://localhost:7003"
+$env:BACKEND_PORT = "7003"
+$env:ADMIN_PORT = "7004"
+$env:REDIS_PORT = "7005"
 # ------------------------------
 
 Write-Host "`nBuilding and starting containers..." -ForegroundColor Yellow
@@ -46,5 +46,6 @@ docker compose -f docker-compose-prod.yml logs --tail=20 admin-ui
 
 Write-Host "`n===== Done! =====" -ForegroundColor Green
 Write-Host "Services should be available at:" -ForegroundColor Green
-Write-Host "  - Backend: http://localhost:9000"
-Write-Host "  - Admin UI: http://localhost:3000"
+Write-Host "  - Backend: http://localhost:7003"
+Write-Host "  - Admin UI: http://localhost:7004"
+Write-Host "  - Redis: localhost:7005"

@@ -1,23 +1,30 @@
 x-project-name: &project_name mtl-commerce-prod
 
+networks:
+  mtl-network:
+    driver: bridge
+
 services:
   backend:
     build:
       context: ./apps/backend-ui
       dockerfile: apps/backend/Dockerfile
     container_name: mtl-backend
+    image: quangthai87/mytholaptopv3:backend-latest
+    networks:
+      - mtl-network
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
-      STORE_CORS: ${STORE_CORS:-http://localhost:8000,http://localhost:3000}
-      ADMIN_CORS: ${ADMIN_CORS:-http://localhost:5173,http://localhost:3000,https://admin.mtl.vn}
-      AUTH_CORS: ${AUTH_CORS:-http://localhost:5173,http://localhost:3000,http://localhost:9000,http://127.0.0.1:3000,https://admin.mtl.vn}
+      STORE_CORS: ${STORE_CORS:-http://localhost:8000,http://localhost:7004,https://admin.mtl.vn}
+      ADMIN_CORS: ${ADMIN_CORS:-https://admin.mtl.vn,http://localhost:7004,https://backend.mtl.vn}
+      AUTH_CORS: ${AUTH_CORS:-https://admin.mtl.vn,https://backend.mtl.vn}
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECRET: ${COOKIE_SECRET}
       PORT: ${BACKEND_PORT:-9000}
-    ports:
-      - "${BACKEND_PORT:-9000}:9000"
+    expose:
+      - "9000"
     volumes:
       - ./apps/backend-ui/apps/backend:/app/data
     depends_on:
@@ -36,13 +43,16 @@ services:
       context: ./apps/admin-ui
       dockerfile: Dockerfile
     container_name: mtl-admin
+    image: quangthai87/mytholaptopv3:admin-ui-latest
+    networks:
+      - mtl-network
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       NEXT_TELEMETRY_DISABLED: 1
-      NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${NEXT_PUBLIC_MEDUSA_BACKEND_URL:-https://backend.mtl.vn}
+      NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${NEXT_PUBLIC_MEDUSA_BACKEND_URL:-http://backend:9000}
       DATABASE_URL: ${DATABASE_URL}
-    ports:
-      - "${ADMIN_PORT:-3000}:3000"
+    expose:
+      - "3000"
     volumes:
       - ./apps/admin-ui:/app/data
     depends_on:
@@ -59,8 +69,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: mtl-redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - mtl-network
     volumes:
       - mtl-redis-data:/data
     command: redis-server --appendonly yes
@@ -73,3 +83,7 @@ services:
 
 volumes:
   mtl-redis-data:
+
+networks:
+  mtl-network:
+    external: false
