@@ -16,6 +16,11 @@ module.exports = defineConfig({
       jwtSecret: process.env.JWT_SECRET || "supersecret",
       cookieSecret: process.env.COOKIE_SECRET || "supersecret",
     },
+    cookieOptions: {
+      sameSite: (process.env.COOKIE_SAME_SITE as "lax" | "strict" | "none") || "lax",
+      secure: process.env.COOKIE_SECURE === "true",
+      domain: process.env.COOKIE_DOMAIN || undefined,
+    },
   },
   modules: {
     [COMPANY_MODULE]: {

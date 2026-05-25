@@ -1,4 +1,4 @@
-x-project-name: &project_name mtl-commerce-prod
+name: mtl-commerce-dev
 
 networks:
   mtl-network:
@@ -6,22 +6,23 @@ networks:
 
 services:
   backend:
-    image: quangthai87/mytholaptopv3:backend-latest
+    build:
+      context: ./apps/backend-ui
+      dockerfile: apps/backend/Dockerfile
     container_name: mtl-backend
     networks:
       - mtl-network
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
-      STORE_CORS: ${STORE_CORS:-http://localhost:7004,https://admin.mtl.vn}
-      ADMIN_CORS: ${ADMIN_CORS:-http://localhost:7003,http://localhost:7004,https://admin.mtl.vn}
-      AUTH_CORS: ${AUTH_CORS:-http://localhost:7003,http://localhost:7004,https://admin.mtl.vn}
-      JWT_SECRET: ${JWT_SECRET}
-      COOKIE_SECRET: ${COOKIE_SECRET}
-      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-none}
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      STORE_CORS: ${STORE_CORS:-http://localhost:7004,http://localhost:8000}
+      ADMIN_CORS: ${ADMIN_CORS:-http://localhost:7003,http://localhost:7004}
+      AUTH_CORS: ${AUTH_CORS:-http://localhost:7003,http://localhost:7004}
+      JWT_SECRET: ${JWT_SECRET:-supersecret_dev_local_2026}
+      COOKIE_SECRET: ${COOKIE_SECRET:-supersecret_dev_local_2026}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       AUTH_COOKIE_SECURE: "false"
       PORT: 7003
     expose:
@@ -42,12 +43,14 @@ services:
     restart: unless-stopped
 
   admin-ui:
-    image: quangthai87/mytholaptopv3:admin-ui-latest
+    build:
+      context: ./apps/admin-ui
+      dockerfile: Dockerfile
     container_name: mtl-admin
     networks:
       - mtl-network
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: ${NODE_ENV:-development}
       NEXT_TELEMETRY_DISABLED: 1
       NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${NEXT_PUBLIC_MEDUSA_BACKEND_URL:-http://backend:7003}
       DATABASE_URL: ${DATABASE_URL}
