@@ -71,24 +71,5 @@ services:
       retries: 5
     restart: unless-stopped
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: mtl-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword&1P@ssw0rd&Aimabiettaolaai
-      POSTGRES_DB: mytholaptop
-    ports:
-      - "7000:5432"
-    volumes:
-      - mtl-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
 volumes:
   mtl-redis-data:
-  mtl-postgres-data:

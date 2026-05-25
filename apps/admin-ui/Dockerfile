@@ -28,7 +28,6 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 # Copy standalone and static
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
 COPY --from=builder /app/.env.example ./.env
 
 # Copy Docker settings (uses http://backend:9000 instead of http://localhost:9000)
