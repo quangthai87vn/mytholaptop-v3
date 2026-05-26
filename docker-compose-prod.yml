@@ -1,79 +1,73 @@
-x-project-name: &project_name mtl-commerce-prod
+name: mtl-commerce-prod
 
 networks:
-  mtl-network:
+  mtl-net:
     driver: bridge
 
 services:
   backend:
-    image: quangthai87/mytholaptopv3:backend-latest
+    image: quangthai87/mytholaptopv3:backend-ui
     container_name: mtl-backend
     networks:
-      - mtl-network
+      - mtl-net
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
-      STORE_CORS: ${STORE_CORS:-http://localhost:7004,https://admin.mtl.vn}
-      ADMIN_CORS: ${ADMIN_CORS:-http://localhost:7003,http://localhost:7004,https://admin.mtl.vn}
-      AUTH_CORS: ${AUTH_CORS:-http://localhost:7003,http://localhost:7004,https://admin.mtl.vn}
+      STORE_CORS: ${STORE_CORS}
+      ADMIN_CORS: ${ADMIN_CORS}
+      AUTH_CORS: ${AUTH_CORS}
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECRET: ${COOKIE_SECRET}
-      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-none}
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
-      AUTH_COOKIE_SECURE: "false"
-      PORT: 7003
-    expose:
-      - "7003"
+      PORT: 9000
     ports:
-      - "7003:7003"
-    volumes:
-      - ./apps/backend-ui/apps/backend:/app/data
+      - "${BACKEND_PORT:-7003}:9000"
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "7003"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 30s
     restart: unless-stopped
 
   admin-ui:
-    image: quangthai87/mytholaptopv3:admin-ui-latest
-    container_name: mtl-admin
+    image: quangthai87/mytholaptopv3:admin-ui
+    container_name: mtl-admin-ui
     networks:
-      - mtl-network
+      - mtl-net
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      NEXT_TELEMETRY_DISABLED: 1
-      NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${NEXT_PUBLIC_MEDUSA_BACKEND_URL:-http://backend:7003}
       DATABASE_URL: ${DATABASE_URL}
-      PORT: 7004
-    expose:
-      - "7004"
+      REDIS_URL: ${REDIS_URL}
+      STORE_CORS: ${STORE_CORS}
+      ADMIN_CORS: ${ADMIN_CORS}
+      AUTH_CORS: ${AUTH_CORS}
+      JWT_SECRET: ${JWT_SECRET}
+      COOKIE_SECRET: ${COOKIE_SECRET}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${NEXT_PUBLIC_MEDUSA_BACKEND_URL}
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: 3000
     ports:
-      - "7004:7004"
-    volumes:
-      - ./apps/admin-ui:/app/data
+      - "${ADMIN_PORT:-7004}:3000"
     depends_on:
       backend:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "7004"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:alpine
     container_name: mtl-redis
     networks:
-      - mtl-network
+      - mtl-net
     ports:
       - "6379:6379"
     volumes:
