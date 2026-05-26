@@ -1,11 +1,15 @@
 #!/bin/bash
 # ============================================================
-# MTL Commerce - Pull & Run Docker Images on Debian
+# MTL Commerce - Auto Deploy (Debian VPS)
 # ============================================================
-# Cách dùng:
-#   1. Copy file này và .env.prod.example sang máy Debian
-#   2. Đổi tên .env.prod.example → .env và sửa thông tin bên trong
-#   3. Chạy: chmod +x deploy.sh && ./deploy.sh
+# Một lệnh duy nhất: chmod +x deploy.sh && ./deploy.sh
+#
+# Script sẽ tự động:
+#   1. Cài Docker (nếu chưa có)
+#   2. Cài Redis container (nếu chưa có)
+#   3. Tạo Docker network (nếu chưa có)
+#   4. Pull images từ Docker Hub (public)
+#   5. Chạy Backend + Admin UI
 #
 # Kết quả:
 #   - Backend (Medusa) : http://localhost:7003
@@ -24,6 +28,8 @@ BACKEND_PORT="${BACKEND_PORT:-7003}"
 ADMIN_PORT="${ADMIN_PORT:-7004}"
 BACKEND_NAME="mtl-backend"
 ADMIN_NAME="mtl-admin-ui"
+REDIS_NAME="mtl-redis"
+NETWORK_NAME="mtl-net"
 
 ENV_FILE="${ENV_FILE:-.env}"
 
@@ -40,11 +46,29 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 fail() { echo -e "${RED}[FAIL]${NC} $1" >&2; exit 1; }
 
 # ============================================================
-# 1. Kiểm tra Docker
+# 1. Kiểm tra & cài Docker
 # ============================================================
-log "Kiểm tra Docker..."
+install_docker() {
+    log "Cài Docker..."
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo systemctl enable docker --now
+    sudo usermod -aG docker "$USER"
+    ok "Docker đã cài xong"
+}
+
 if ! command -v docker &> /dev/null; then
-    fail "Docker chưa được cài đặt. Chạy: sudo apt install -y docker.io"
+    warn "Docker chưa có. Bắt đầu cài..."
+    install_docker
+elif ! docker info &> /dev/null; then
+    warn "Docker daemon không chạy. Thử khởi động..."
+    sudo systemctl start docker || sudo service docker start || true
 fi
 DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo "unknown")
 ok "Docker $DOCKER_VERSION"
@@ -55,7 +79,7 @@ ok "Docker $DOCKER_VERSION"
 log "Đọc biến môi trường từ $ENV_FILE..."
 
 if [[ ! -f "$ENV_FILE" ]]; then
-    fail "Không tìm thấy file $ENV_FILE. Đổi tên .env.prod.example → .env"
+    fail "Không tìm thấy file $ENV_FILE. Copy .env.prod.example → .env và chỉnh sửa."
 fi
 
 # Load từng biến cần thiết
@@ -78,7 +102,7 @@ for var in "${REQUIRED_VARS[@]}"; do
     fi
 done
 
-# Giá trị mặc định nếu không có
+# Giá trị mặc định
 NODE_ENV="${NODE_ENV:-production}"
 COOKIE_SAME_SITE="${COOKIE_SAME_SITE:-none}"
 COOKIE_SECURE="${COOKIE_SECURE:-true}"
@@ -88,9 +112,43 @@ NEXT_TELEMETRY_DISABLED="${NEXT_TELEMETRY_DISABLED:-1}"
 ok "Tất cả biến môi trường hợp lệ"
 
 # ============================================================
-# 3. Stop containers cũ nếu có
+# 3. Tạo Docker network
 # ============================================================
-log "Dọn containers cũ (nếu có)..."
+log "Thiết lập Docker network..."
+if ! docker network inspect "$NETWORK_NAME" &> /dev/null; then
+    docker network create "$NETWORK_NAME" > /dev/null 2>&1
+    ok "Network '$NETWORK_NAME' đã tạo"
+else
+    ok "Network '$NETWORK_NAME' đã tồn tại"
+fi
+
+# ============================================================
+# 4. Cài Redis nếu REDIS_URL là redis://redis:xxx
+# ============================================================
+if [[ "$REDIS_URL" == redis://redis:* ]]; then
+    REDIS_HOST=$(echo "$REDIS_URL" | sed 's|redis://redis:\([0-9]*\).*|\1|')
+    REDIS_HOST="${REDIS_HOST:-6379}"
+
+    if ! docker ps --format '{{.Names}}' | grep -q "^${REDIS_NAME}$"; then
+        log "Cài Redis container..."
+        docker run -d \
+            --name "$REDIS_NAME" \
+            --restart unless-stopped \
+            --network "$NETWORK_NAME" \
+            -p "${REDIS_HOST}:6379" \
+            redis:alpine > /dev/null 2>&1
+        ok "Redis container đã chạy"
+    else
+        ok "Redis container đã tồn tại"
+    fi
+else
+    ok "REDIS_URL sử dụng Redis external (không cần container)"
+fi
+
+# ============================================================
+# 5. Stop containers cũ nếu có
+# ============================================================
+log "Dọn containers cũ..."
 
 stop_container() {
     local name=$1
@@ -105,30 +163,30 @@ stop_container "$BACKEND_NAME"
 stop_container "$ADMIN_NAME"
 
 # ============================================================
-# 4. Pull images (images public - không cần login)
+# 6. Pull images (public - không cần login)
 # ============================================================
-log "Pull images từ Docker Hub public..."
-if docker pull "$BACKEND_IMAGE:$IMAGE_TAG"; then
-    ok "Pull backend-ui thành công"
-else
-    fail "Pull backend-ui thất bại"
+log "Pull images từ Docker Hub..."
+log "Pull: $BACKEND_IMAGE"
+if ! docker pull "$BACKEND_IMAGE:$IMAGE_TAG"; then
+    fail "Pull backend-ui thất bại. Kiểm tra tên image trên Docker Hub."
 fi
+ok "Pull backend-ui thành công"
 
-log "Pull image: $ADMIN_IMAGE"
-if docker pull "$ADMIN_IMAGE:$IMAGE_TAG"; then
-    ok "Pull admin-ui thành công"
-else
-    fail "Pull admin-ui thất bại"
+log "Pull: $ADMIN_IMAGE"
+if ! docker pull "$ADMIN_IMAGE:$IMAGE_TAG"; then
+    fail "Pull admin-ui thất bại. Kiểm tra tên image trên Docker Hub."
 fi
+ok "Pull admin-ui thành công"
 
 # ============================================================
-# 5. Chạy Backend (Medusa)
+# 7. Chạy Backend (Medusa)
 # ============================================================
 log "Chạy Backend (Medusa)..."
 
 docker run -d \
     --name "$BACKEND_NAME" \
     --restart unless-stopped \
+    --network "$NETWORK_NAME" \
     -p "${BACKEND_PORT}:9000" \
     -e NODE_ENV="$NODE_ENV" \
     -e DATABASE_URL="$DATABASE_URL" \
@@ -147,13 +205,14 @@ docker run -d \
 ok "Backend đang chạy trên http://localhost:${BACKEND_PORT}"
 
 # ============================================================
-# 6. Chạy Admin UI (Next.js)
+# 8. Chạy Admin UI (Next.js)
 # ============================================================
 log "Chạy Admin UI (Next.js)..."
 
 docker run -d \
     --name "$ADMIN_NAME" \
     --restart unless-stopped \
+    --network "$NETWORK_NAME" \
     -p "${ADMIN_PORT}:3000" \
     -e NODE_ENV="$NODE_ENV" \
     -e DATABASE_URL="$DATABASE_URL" \
@@ -174,11 +233,11 @@ docker run -d \
 ok "Admin UI đang chạy trên http://localhost:${ADMIN_PORT}"
 
 # ============================================================
-# 7. Chờ và kiểm tra health
+# 9. Chờ và kiểm tra health
 # ============================================================
 echo ""
-log "Chờ services khởi động (10 giây)..."
-sleep 10
+log "Chờ services khởi động (15 giây)..."
+sleep 15
 
 echo ""
 echo "========================================"
@@ -194,7 +253,6 @@ echo "  Backend  : http://localhost:${BACKEND_PORT}"
 echo "  Admin UI : http://localhost:${ADMIN_PORT}"
 echo ""
 
-# Logs
 echo "========================================"
 echo -e "${CYAN}  Backend logs (10 dòng cuối)${NC}"
 echo "========================================"
@@ -210,7 +268,8 @@ echo ""
 ok "Hoàn tất!"
 echo ""
 echo "Lệnh hữu ích:"
-echo "  docker logs -f $BACKEND_NAME   # Xem logs backend"
-echo "  docker logs -f $ADMIN_NAME     # Xem logs admin-ui"
-echo "  docker stop $BACKEND_NAME $ADMIN_NAME  # Dừng cả 2"
-echo "  docker rm $BACKEND_NAME $ADMIN_NAME    # Xóa container"
+echo "  docker logs -f $BACKEND_NAME     # Xem logs backend"
+echo "  docker logs -f $ADMIN_NAME       # Xem logs admin-ui"
+echo "  ./deploy.sh                      # Chạy lại (update)"
+echo "  docker stop $BACKEND_NAME $ADMIN_NAME $REDIS_NAME  # Dừng tất cả"
+echo "  docker rm $BACKEND_NAME $ADMIN_NAME $REDIS_NAME    # Xóa container"
