@@ -144,14 +144,12 @@ function Build-And-Push {
     }
     Write-Success "Push OK: $FullImage"
 
-    # Push custom tag (e.g. mytholaptopv3:latest)
-    if ($Tag -ne $ImageTag) {
-        $push2 = docker push $TaggedImage 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Push failed: $TaggedImage"
-        } else {
-            Write-Success "Push OK: $TaggedImage"
-        }
+    # Push :latest tag for both services (backend-ui pushed LAST so latest = backend)
+    $push2 = docker push $TaggedImage 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "Push failed: $TaggedImage"
+    } else {
+        Write-Success "Push OK: $TaggedImage"
     }
 
     return $true
