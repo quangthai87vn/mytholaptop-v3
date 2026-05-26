@@ -15,12 +15,10 @@
 set -e
 
 # --- Config ---
-DOCKER_HUB_USERNAME="${DOCKER_HUB_USERNAME:-quangthai87}"
-DOCKER_HUB_REPO="mytholaptopv3"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
-BACKEND_IMAGE="${DOCKER_HUB_USERNAME}/${DOCKER_HUB_REPO}:backend-ui"
-ADMIN_IMAGE="${DOCKER_HUB_USERNAME}/${DOCKER_HUB_REPO}:admin-ui"
+BACKEND_IMAGE="mytholaptopv3/backend-ui"
+ADMIN_IMAGE="mytholaptopv3/admin-ui"
 
 BACKEND_PORT="${BACKEND_PORT:-7003}"
 ADMIN_PORT="${ADMIN_PORT:-7004}"
@@ -107,21 +105,9 @@ stop_container "$BACKEND_NAME"
 stop_container "$ADMIN_NAME"
 
 # ============================================================
-# 4. Login Docker Hub
+# 4. Pull images (images public - không cần login)
 # ============================================================
-log "Login Docker Hub..."
-if docker login -u "$DOCKER_HUB_USERNAME" 2>&1 | grep -q "Login Succeeded"; then
-    ok "Docker Hub login thành công"
-elif docker info 2>/dev/null | grep -q "Username:"; then
-    ok "Đã đăng nhập Docker Hub"
-else
-    warn "Chưa đăng nhập Docker Hub. Nếu pull thất bại, chạy: docker login"
-fi
-
-# ============================================================
-# 5. Pull images
-# ============================================================
-log "Pull image: $BACKEND_IMAGE"
+log "Pull images từ Docker Hub public..."
 if docker pull "$BACKEND_IMAGE:$IMAGE_TAG"; then
     ok "Pull backend-ui thành công"
 else
@@ -136,7 +122,7 @@ else
 fi
 
 # ============================================================
-# 6. Chạy Backend (Medusa)
+# 5. Chạy Backend (Medusa)
 # ============================================================
 log "Chạy Backend (Medusa)..."
 
@@ -161,7 +147,7 @@ docker run -d \
 ok "Backend đang chạy trên http://localhost:${BACKEND_PORT}"
 
 # ============================================================
-# 7. Chạy Admin UI (Next.js)
+# 6. Chạy Admin UI (Next.js)
 # ============================================================
 log "Chạy Admin UI (Next.js)..."
 
@@ -188,7 +174,7 @@ docker run -d \
 ok "Admin UI đang chạy trên http://localhost:${ADMIN_PORT}"
 
 # ============================================================
-# 8. Chờ và kiểm tra health
+# 7. Chờ và kiểm tra health
 # ============================================================
 echo ""
 log "Chờ services khởi động (10 giây)..."
