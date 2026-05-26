@@ -2,6 +2,7 @@ name: mtl-commerce-prod
 
 networks:
   mtl-net:
+    name: mtl-net
     driver: bridge
 
 services:
