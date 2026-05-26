@@ -3,13 +3,16 @@
  */
 
 import { query } from "@/lib/db";
+import { getCacheOrFetch, invalidateAICache } from "./cache";
 import type { SystemPromptTemplate } from "@/types/ai-operating";
 
 export async function getAllSystemPrompts(): Promise<SystemPromptTemplate[]> {
-  const { rows } = await query<SystemPromptTemplate>(
-    "SELECT * FROM ai_system_prompt_templates ORDER BY is_default DESC, id ASC"
-  );
-  return rows;
+  return getCacheOrFetch("ai:system-prompts", async () => {
+    const { rows } = await query<SystemPromptTemplate>(
+      "SELECT * FROM ai_system_prompt_templates ORDER BY is_default DESC, id ASC"
+    );
+    return rows;
+  });
 }
 
 export async function getSystemPromptById(
@@ -54,6 +57,7 @@ export async function upsertSystemPrompt(data: {
      RETURNING *`,
     [data.name, data.description, data.prompt_text, data.is_active ?? true, data.is_default ?? false]
   );
+  invalidateAICache();
   return rows[0];
 }
 
@@ -63,6 +67,7 @@ export async function setDefaultSystemPrompt(id: number): Promise<void> {
     "UPDATE ai_system_prompt_templates SET is_default = true WHERE id = $1",
     [id]
   );
+  invalidateAICache();
 }
 
 export async function deleteSystemPrompt(id: number): Promise<boolean> {
@@ -70,5 +75,6 @@ export async function deleteSystemPrompt(id: number): Promise<boolean> {
     "DELETE FROM ai_system_prompt_templates WHERE id = $1",
     [id]
   );
+  invalidateAICache();
   return (rowCount ?? 0) > 0;
 }

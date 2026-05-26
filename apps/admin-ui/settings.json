@@ -1,0 +1,25 @@
+{
+  "company": {
+    "name": "My Tho Laptop",
+    "website": "https://mytholaptop.vn",
+    "phone": "0273 381 2345",
+    "address": "123 Tran Hung Dao, P.1, TP. My Tho, Tien Giang",
+    "logoUrl": ""
+  },
+  "wooCommerce": {
+    "wordpressUrl": "https://mytholaptop.vn",
+    "consumerKey": "ck_dc053e3e88a9391434fb0f4027e349a811b65191",
+    "consumerSecret": "cs_35b45e5ff1c69777010eb57ff296ba8afdb7d9d8"
+  },
+  "medusa": {
+    "backendUrl": "https://backend.mtl.vn",
+    "adminApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY3Rvcl9pZCI6InVzZXJfMDFLUzdHUzEyUEI1WVM1OFlUMEQ1MTFXRVAiLCJhY3Rvcl90eXBlIjoidXNlciIsImF1dGhfaWRlbnRpdHlfaWQiOiJhdXRoaWRfMDFLUzdHUzE1OTFETUcwUUU2U0RaUzRHSkgiLCJhdXRoX3Byb3ZpZGVyIjoiZW1haWxwYXNzIiwiYXBwX21ldGFkYXRhIjp7InVzZXJfaWQiOiJ1c2VyXzAxS1M3R1MxMlBCNVlTNThZVDBENTExV0VQIn0sInVzZXJfbWV0YWRhdGEiOnt9LCJpYXQiOjE3Nzk3MjM0NTUsImV4cCI6MTc3OTgwOTg1NX0.O3j5NFOav5msQxoN3cZTYEyqonU8kBmo47RpdLYolKc",
+    "adminEmail": "quangthai87@gmail.com",
+    "adminPassword": "1P@ssw0rdphatxitnhat"
+  },
+  "ui": {
+    "primaryColor": "#DC2626",
+    "darkMode": false,
+    "sidebarCollapsed": false
+  }
+}

@@ -3,20 +3,25 @@
  */
 
 import { query } from "@/lib/db";
+import { getCacheOrFetch, invalidateAICache } from "./cache";
 import type { BrandVoice, BrandVoiceInput } from "@/types/ai-operating";
 
 export async function getAllBrandVoices(): Promise<BrandVoice[]> {
-  const { rows } = await query<BrandVoice>(
-    "SELECT * FROM ai_brand_voices ORDER BY id ASC"
-  );
-  return rows;
+  return getCacheOrFetch("ai:brand-voices", async () => {
+    const { rows } = await query<BrandVoice>(
+      "SELECT * FROM ai_brand_voices ORDER BY id ASC"
+    );
+    return rows;
+  });
 }
 
 export async function getActiveBrandVoice(): Promise<BrandVoice | null> {
-  const { rows } = await query<BrandVoice>(
-    "SELECT * FROM ai_brand_voices WHERE is_active = true LIMIT 1"
-  );
-  return rows[0] || null;
+  return getCacheOrFetch("ai:active-brand-voice", async () => {
+    const { rows } = await query<BrandVoice>(
+      "SELECT * FROM ai_brand_voices WHERE is_active = true LIMIT 1"
+    );
+    return rows[0] ?? null;
+  });
 }
 
 export async function getBrandVoiceByPreset(
@@ -73,6 +78,7 @@ export async function upsertBrandVoice(
       data.is_active ?? true,
     ]
   );
+  invalidateAICache();
   return rows[0];
 }
 
@@ -82,6 +88,7 @@ export async function setActiveBrandVoice(preset: string): Promise<BrandVoice | 
     "UPDATE ai_brand_voices SET is_active = true, updated_at = NOW() WHERE preset = $1 RETURNING *",
     [preset]
   );
+  invalidateAICache();
   return rows[0] || null;
 }
 
@@ -90,5 +97,6 @@ export async function deleteBrandVoice(preset: string): Promise<boolean> {
     "DELETE FROM ai_brand_voices WHERE preset = $1",
     [preset]
   );
+  invalidateAICache();
   return (rowCount ?? 0) > 0;
 }

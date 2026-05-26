@@ -1,32 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
+import { getAppSetting, saveAppSetting } from "@/lib/content/db/app-settings";
 
 export async function GET() {
   try {
-    const raw = await fs.readFile(SETTINGS_FILE, "utf-8");
-    const settings = JSON.parse(raw);
+    const [wooCommerce, medusa, company] = await Promise.all([
+      getAppSetting("wooCommerce"),
+      getAppSetting("medusa"),
+      getAppSetting("company"),
+    ]);
+
+    const settings = {
+      wooCommerce: (wooCommerce as Record<string, string>) ?? {
+        wordpressUrl: "",
+        consumerKey: "",
+        consumerSecret: "",
+      },
+      medusa: (medusa as Record<string, string>) ?? {
+        backendUrl: "",
+        adminEmail: "",
+        adminPassword: "",
+        adminApiKey: "",
+      },
+      company: (company as Record<string, string>) ?? {
+        name: "",
+        website: "",
+        phone: "",
+        logoUrl: "",
+        address: "",
+      },
+    };
+
     return NextResponse.json(settings);
-  } catch {
-    return NextResponse.json(
-      { error: "Failed to read settings" },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error("[Settings GET]", err);
+    return NextResponse.json({ error: "Lỗi khi đọc settings" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    await fs.writeFile(SETTINGS_FILE, JSON.stringify(body, null, 2), "utf-8");
+
+    const { wooCommerce, medusa, company } = body;
+
+    const saves: Promise<void>[] = [];
+
+    if (wooCommerce) {
+      saves.push(saveAppSetting("wooCommerce", wooCommerce));
+    }
+    if (medusa) {
+      saves.push(saveAppSetting("medusa", medusa));
+    }
+    if (company) {
+      saves.push(saveAppSetting("company", company));
+    }
+
+    await Promise.all(saves);
+
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json(
-      { error: "Failed to save settings" },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error("[Settings POST]", err);
+    return NextResponse.json({ error: "Lỗi khi lưu settings" }, { status: 500 });
   }
 }

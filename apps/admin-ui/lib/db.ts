@@ -24,9 +24,10 @@ function getPool(): Pool {
 
   _pool = new Pool({
     connectionString: DATABASE_URL,
-    max: 20,
+    max: 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000,
+    statement_timeout: 10000,
   });
 
   _pool.on("error", (err) => {

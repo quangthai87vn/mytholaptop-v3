@@ -1,168 +1,242 @@
-# MTL Commerce - Hệ thống Thương mại điện tử Mỹ Tho Laptop
+# MTL Commerce
 
 Hệ thống B2B e-commerce platform cho Mỹ Tho Laptop, bao gồm Medusa backend, Next.js admin dashboard, và AI-powered content automation.
+
+---
 
 ## Mục lục
 
 - [Kiến trúc](#kiến-trúc)
 - [Cấu trúc Project](#cấu-trúc-project)
-- [Quick Start](#quick-start)
-- [Docker Deployment](#docker-deployment)
-- [Build từ Source](#build-từ-source)
+- [Docker Hub](#docker-hub)
+- [Pull & Chạy trên máy khác](#pull--chạy-trên-máy-khác)
+- [Build & Push Docker Images](#build--push-docker-images)
+- [Development Local](#development-local)
 - [Cấu hình môi trường](#cấu-hình-môi-trường)
-- [Tính năng chính](#tính-năng-chính)
 - [Scripts](#scripts)
-- [Development](#development)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Kiến trúc
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Client (Browser)                      │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-        ┌──────────────┴──────────────┐
-        ▼                              ▼
-┌───────────────────────┐   ┌───────────────────────┐
-│   Admin UI (Next.js)  │   │   Storefront (Next.js) │
-│   Port: 7004          │   │   Port: 8000 (future) │
-└───────────┬───────────┘   └───────────┬───────────┘
-            │                           │
-            │  REST API                 │  Store API
-            ▼                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│               Medusa Backend (Node.js)                       │
-│               Port: 7003                                     │
-│  ┌──────────────┬──────────────┬───────────────────────┐  │
-│  │  Admin API   │  Store API   │  Custom Modules       │  │
-│  │  /admin/*    │  /store/*   │  Company, Quote,      │  │
-│  │              │              │  Approval             │  │
-│  └──────────────┴──────────────┴───────────────────────┘  │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-          ┌─────────────┴─────────────┐
-          ▼                           ▼
-┌─────────────────────┐   ┌─────────────────────┐
-│   PostgreSQL         │   │   Redis (Cache)     │
-│   (External Server)  │   │   Docker Container  │
-└─────────────────────┘   └─────────────────────┘
+Client (Browser)
+        │
+        ▼
+┌───────────────────────────────────────────────────────┐
+│                    Docker Network                       │
+│                                                        │
+│   ┌───────────────┐    ┌───────────────┐              │
+│   │  Admin UI     │    │   Backend     │              │
+│   │  Next.js :3000│◄──►│  Medusa :9000│              │
+│   └───────────────┘    └───────┬───────┘              │
+│                                │                       │
+│   ┌───────────────┐            │                       │
+│   │    Redis      │◄───────────┘                       │
+│   │  redis:6379   │                                    │
+│   └───────────────┘                                    │
+└───────────────────────────────────────────────────────┘
+        │
+        ▼
+  Nginx Reverse Proxy
+        │
+        ├── https://admin.mtl.vn   (Admin UI)
+        └── https://backend.mtl.vn (Backend API)
 ```
+
+---
 
 ## Cấu trúc Project
 
 ```
 mytholaptop-v3/
 ├── apps/
-│   ├── admin-ui/           # Next.js Admin Dashboard
-│   │   ├── app/
-│   │   │   ├── (admin)/           # Admin layout routes
-│   │   │   │   ├── dashboard/
-│   │   │   │   ├── content/        # AI Content Studio
-│   │   │   │   ├── products/       # Quản lý sản phẩm
-│   │   │   │   ├── customers/      # Quản lý khách hàng
-│   │   │   │   ├── orders/        # Quản lý đơn hàng
-│   │   │   │   ├── sales/         # Bán hàng
-│   │   │   │   └── settings/
-│   │   │   └── api/               # API routes
-│   │   │       ├── ai/           # AI APIs
-│   │   │       ├── medusa/        # Medusa proxy
-│   │   │       └── content/       # Content management
-│   │   ├── components/           # UI components
-│   │   ├── lib/                  # Utilities & AI engine
-│   │   └── public/               # Static assets (local only, not in git)
+│   ├── admin-ui/               # Next.js Admin Dashboard (port 3000)
+│   │   ├── app/               # App Router
+│   │   │   ├── api/           # API routes (ai, medusa, content...)
+│   │   │   └── (admin)/       # Admin pages
+│   │   ├── components/         # UI components
+│   │   ├── lib/               # Utilities, AI engine
+│   │   ├── Dockerfile          # Production Dockerfile
+│   │   └── settings.json      # App config (gitignored)
 │   │
 │   └── backend-ui/
 │       └── apps/
-│           ├── backend/          # Medusa Backend
-│           │   ├── src/
-│           │   │   ├── api/     # Custom API routes
-│           │   │   ├── modules/  # Custom modules
-│           │   │   └── medusa-config.ts
-│           └── storefront/      # Future storefront
+│           └── backend/         # Medusa Backend (port 9000)
+│               ├── src/
+│               │   ├── api/    # Custom API routes
+│               │   ├── modules/ # Custom modules (Company, Quote...)
+│               │   └── migrations/
+│               └── Dockerfile  # Production Dockerfile
 │
-├── docker-compose-prod.yml       # Production Docker Compose (no postgres)
-├── deploy.sh                     # Deploy script cho Linux/Mac
-├── deploy.ps1                    # Deploy script cho Windows
-├── .env.prod.example             # Production env template
-└── README.md
+├── docker-compose-dev.yml      # Dev compose (local)
+├── deploy.ps1                 # Deploy script (Windows)
+├── deploy-debian.sh           # Deploy script (Linux/Debian)
+├── push_docker_hub.ps1        # Build & push images to Docker Hub
+└── .env                       # Env config (gitignored)
 ```
 
 ---
 
-## Quick Start
+## Docker Hub
 
-### Yêu cầu
+Repository: [quangthai87/mytholaptopv3](https://hub.docker.com/r/quangthai87/mytholaptopv3)
 
-- **Node.js** >= 20.0.0
-- **pnpm** >= 9.0.0
-- **PostgreSQL** >= 14 (external server)
-- **Redis** >= 6
-- **Docker** & **Docker Compose** (cho deployment)
+Tags có sẵn:
 
-### Cài đặt
+| Tag | Mô tả |
+|-----|--------|
+| `admin-ui` | Next.js Admin Dashboard |
+| `backend-ui` | Medusa Backend |
+| `latest` | Tham chiếu alias cho tag mới nhất |
+
+**Image URL:** `docker.io/quangthai87/mytholaptopv3:<tag>`
+
+---
+
+## Pull & Chạy trên máy khác
+
+Có 2 cách để chạy trên máy Debian:
+
+- **[Cách 1: Script tự động (Khuyến nghị)](#cách-1-script-tự-động)** — Pull + Run 1 lệnh duy nhất
+- **[Cách 2: Docker Compose](#cách-2-docker-compose)** — Cấu hình chi tiết hơn
+
+---
+
+### Cách 1: Script tự động
+
+Script `deploy-debian.sh` tự động pull image từ Docker Hub và chạy cả 2 container chỉ với 1 lệnh.
+
+#### Yêu cầu
+
+- Docker đã cài trên Debian
+- File `.env` chứa biến môi trường
+- Đã đẩy image lên Docker Hub (`push_docker_hub.ps1`)
+
+#### Các bước
+
+**1. Copy file sang máy Debian**
 
 ```bash
-# Clone repository
-git clone https://github.com/quangthai87vn/mytholaptop-v3.git
-cd mytholaptop-v3
+scp deploy-debian.sh .env.prod.example root@your-debian:/opt/mtl/
+```
 
-# Cài pnpm global (nếu chưa có)
-npm install -g pnpm@9
+**2. SSH vào Debian, chuẩn bị file .env**
 
-# Cài dependencies cho tất cả apps
-pnpm install
+```bash
+ssh root@your-debian
+cd /opt/mtl
 
-# Copy và cấu hình .env
+# Tạo .env từ template
 cp .env.prod.example .env
-# Chỉnh sửa .env với giá trị thật
+
+# Sửa DATABASE_URL cho đúng với server của bạn
+nano .env
 ```
 
-### Development
+**3. Chạy script**
 
 ```bash
-# Chạy tất cả apps (cần PostgreSQL + Redis đang chạy)
-pnpm dev
-
-# Hoặc chạy riêng từng app:
-pnpm dev:admin    # Admin UI: http://localhost:7004
-pnpm dev:backend  # Backend: http://localhost:7003
+chmod +x deploy-debian.sh
+./deploy-debian.sh
 ```
+
+Script sẽ tự động:
+- Check Docker
+- Load biến môi trường từ `.env`
+- Stop container cũ (nếu có)
+- Login Docker Hub
+- Pull cả 2 image (`backend-ui`, `admin-ui`)
+- Run container với đầy đủ biến môi trường
+- Check health và hiển thị logs
+
+**4. Kết quả**
+
+| Service | URL |
+|---------|-----|
+| Backend (Medusa) | http://localhost:7003 |
+| Admin UI (Next.js) | http://localhost:7004 |
+
+**Lệnh hữu ích sau khi chạy:**
+
+```bash
+docker logs -f mtl-backend      # Xem logs backend
+docker logs -f mtl-admin-ui     # Xem logs admin-ui
+docker stop mtl-backend mtl-admin-ui   # Dừng cả 2
+docker rm mtl-backend mtl-admin-ui     # Xóa container
+```
+
+#### Biến môi trường cần có trong `.env`
+
+| Biến | Bắt buộc | Mô tả |
+|------|----------|--------|
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `REDIS_URL` | ✅ | Redis URL (docker internal) |
+| `JWT_SECRET` | ✅ | JWT signing secret |
+| `COOKIE_SECRET` | ✅ | Cookie signing secret |
+| `ADMIN_CORS` | ✅ | CORS cho admin |
+| `AUTH_CORS` | ✅ | CORS cho auth |
+| `STORE_CORS` | ✅ | CORS cho store |
+| `COOKIE_SAME_SITE` | | Cookie same site (mặc định: none) |
+| `COOKIE_SECURE` | | Cookie secure (mặc định: true) |
+| `COOKIE_DOMAIN` | | Cookie domain |
+| `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | ✅ | Backend URL |
+| `DOCKER_HUB_USERNAME` | | Username Docker Hub (mặc định: quangthai87) |
+| `IMAGE_TAG` | | Tag image (mặc định: latest) |
 
 ---
 
-## Docker Hub Images
+### Cách 2: Docker Compose
 
-Các Docker images đã được publish lên Docker Hub:
+#### Yêu cầu
+
+- Docker >= 24.0
+- Docker Compose >= 2.20
+- PostgreSQL >= 14 (external server, không có trong compose)
+- Domain đã trỏ DNS (nếu dùng production)
+
+### Các bước
+
+#### 1. SSH vào server
 
 ```bash
-# Admin UI
-docker pull quangthai87/mytholaptopv3:admin-ui-latest
-
-# Backend (Medusa)
-docker pull quangthai87/mytholaptopv3:backend-latest
-
-# Redis (official image)
-docker pull redis:7-alpine
+ssh your-server
 ```
 
-### Pull và chạy từ Docker Hub (Production với Domain)
+#### 2. Tạo thư mục project
 
 ```bash
-# 1. SSH vào server
-ssh your-server
-
-# 2. Tạo thư mục project
 mkdir -p mytholaptopv3 && cd mytholaptopv3
+```
 
-# 3. Pull images mới nhất
-docker pull quangthai87/mytholaptopv3:admin-ui-latest
-docker pull quangthai87/mytholaptopv3:backend-latest
+#### 3. Tạo file `.env`
 
-# 4. Tạo file docker-compose.yml với network nội bộ
+```bash
+cat > .env << 'EOF'
+NODE_ENV=production
+DOCKER_HUB_USERNAME=quangthai87
+
+# PostgreSQL - Thay đổi theo server của bạn
+DATABASE_URL=postgresql://user:password@your-postgres-host:5432/mytholaptop
+
+# Redis - Dùng container trong compose
+REDIS_URL=redis://redis:6379
+
+# Security
+JWT_SECRET=your-random-secret-min-32-chars
+COOKIE_SECRET=your-random-secret-min-32-chars
+
+# Backend URL - Domain của backend
+NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://backend.mtl.vn
+EOF
+```
+
+#### 4. Tạo file `docker-compose.yml`
+
+```bash
 cat > docker-compose.yml << 'EOF'
-x-project-name: &project_name mtl-commerce-prod
+name: mtl-commerce-prod
 
 networks:
   mtl-network:
@@ -170,27 +244,24 @@ networks:
 
 services:
   backend:
-    image: quangthai87/mytholaptopv3:backend-latest
+    image: quangthai87/mytholaptopv3:backend-ui
     container_name: mtl-backend
     networks:
       - mtl-network
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
-      STORE_CORS: ${STORE_CORS:-https://admin.mtl.vn}
-      ADMIN_CORS: ${ADMIN_CORS:-https://admin.mtl.vn,https://backend.mtl.vn}
-      AUTH_CORS: ${AUTH_CORS:-https://admin.mtl.vn,https://backend.mtl.vn}
+      ADMIN_CORS: "https://admin.mtl.vn"
+      AUTH_CORS: "https://admin.mtl.vn"
+      STORE_CORS: "https://admin.mtl.vn"
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECRET: ${COOKIE_SECRET}
       PORT: 9000
     expose:
       - "9000"
     volumes:
-      - ./data:/app/data
-    depends_on:
-      redis:
-        condition: service_healthy
+      - ./data/backend:/app/data
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "9000"]
       interval: 10s
@@ -200,14 +271,14 @@ services:
     restart: unless-stopped
 
   admin-ui:
-    image: quangthai87/mytholaptopv3:admin-ui-latest
+    image: quangthai87/mytholaptopv3:admin-ui
     container_name: mtl-admin
     networks:
       - mtl-network
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: 1
-      NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${NEXT_PUBLIC_MEDUSA_BACKEND_URL:-http://backend:9000}
+      NEXT_PUBLIC_MEDUSA_BACKEND_URL: http://backend:9000
       DATABASE_URL: ${DATABASE_URL}
     expose:
       - "3000"
@@ -242,56 +313,31 @@ services:
 volumes:
   mtl-redis-data:
 EOF
+```
 
-# 5. Tạo file .env
-cat > .env << 'EOF'
-NODE_ENV=production
-DATABASE_URL=postgresql://user:password@your-postgres-host:5432/mytholaptop
-REDIS_URL=redis://redis:6379
-JWT_SECRET=your-random-secret-min-32-chars
-COOKIE_SECRET=your-random-secret-min-32-chars
-NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://backend.mtl.vn
-EOF
+#### 5. Chạy containers
 
-# 6. Chạy containers
+```bash
 docker compose up -d
 
-# 7. Kiểm tra trạng thái
+# Kiểm tra trạng thái
 docker compose ps
 
-# 8. Xem logs
+# Xem logs
 docker compose logs -f
 ```
 
-**Services (Internal Network):**
-- Backend: `http://backend:9000` (container network)
-- Admin UI: `http://admin-ui:3000` (container network)
-- Redis: `redis://redis:6379` (container network)
-
-**Public URLs (qua Reverse Proxy):**
-- Backend API: `https://backend.mtl.vn`
-- Admin Dashboard: `https://admin.mtl.vn`
-
----
-
-## Reverse Proxy Setup (Nginx)
-
-Vì containers không expose port ra ngoài, cần reverse proxy để route domain.
-
-### Cài đặt Nginx
+#### 6. Cài đặt Nginx Reverse Proxy
 
 ```bash
 # Ubuntu/Debian
 sudo apt update && sudo apt install nginx certbot python3-certbot-nginx
 
-# Cấu hình Nginx cho backend.mtl.vn
+# Backend proxy
 sudo nano /etc/nginx/sites-available/backend.mtl.vn
 ```
 
-### Cấu hình Nginx
-
 ```nginx
-# /etc/nginx/sites-available/backend.mtl.vn
 server {
     listen 80;
     server_name backend.mtl.vn;
@@ -299,17 +345,20 @@ server {
     location / {
         proxy_pass http://127.0.0.1:9000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
     }
 }
+```
 
-# /etc/nginx/sites-available/admin.mtl.vn
+```bash
+# Admin proxy
+sudo nano /etc/nginx/sites-available/admin.mtl.vn
+```
+
+```nginx
 server {
     listen 80;
     server_name admin.mtl.vn;
@@ -317,148 +366,125 @@ server {
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
     }
 }
 ```
-
-### Kích hoạt và restart
 
 ```bash
 # Enable sites
 sudo ln -s /etc/nginx/sites-available/backend.mtl.vn /etc/nginx/sites-enabled/
 sudo ln -s /etc/nginx/sites-available/admin.mtl.vn /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 
-# Test config
-sudo nginx -t
-
-# Restart Nginx
-sudo systemctl restart nginx
-
-# SSL Certificate (Let's Encrypt)
+# SSL certificate
 sudo certbot --nginx -d backend.mtl.vn -d admin.mtl.vn
 ```
 
----
-
-## DNS Configuration
-
-Cần tạo DNS records cho domain:
-
-| Type | Name | Value |
-|------|------|-------|
-| A | backend.mtl.vn | YOUR_SERVER_IP |
-| A | admin.mtl.vn | YOUR_SERVER_IP |
-
----
-
-## Docker Deployment
-
-### Build và chạy (Local Build)
-
-**Yêu cầu:**
-- Docker >= 24.0
-- Docker Compose >= 2.20
-- PostgreSQL external server
-- Reverse Proxy (Nginx) để route domain
-- Server có RAM >= 2GB, Disk >= 5GB
-
-**Các bước:**
+#### 7. Cập nhật Docker images
 
 ```bash
-# 1. SSH vào server
-ssh your-server
+# Pull images mới nhất
+docker compose pull
 
-# 2. Clone hoặc pull code mới nhất
+# Restart với image mới
+docker compose up -d
+```
+
+---
+
+## Build & Push Docker Images
+
+> Chỉ chạy trên máy đã có code mới nhất. Mỗi lần build đều compile lại từ đầu (`--no-cache`).
+
+### Yêu cầu
+
+- Docker Desktop đang chạy
+- Đã login Docker Hub: `docker login`
+- Đã tạo repository `mytholaptopv3` trên Docker Hub
+- `DOCKER_HUB_USERNAME=quangthai87` trong `.env`
+
+### Các bước
+
+#### 1. Cấu hình username (nếu chưa có)
+
+```powershell
+# Thêm vào .env ở project root
+DOCKER_HUB_USERNAME=quangthai87
+```
+
+#### 2. Chạy script
+
+```powershell
+# Push tất cả (default tag: latest)
+.\push_docker_hub.ps1
+
+# Push tất cả với tag tùy chọn
+.\push_docker_hub.ps1 all v1.0.0
+
+# Push từng service
+.\push_docker_hub.ps1 admin-ui
+.\push_docker_hub.ps1 backend-ui
+```
+
+#### 3. Kiểm tra trên Docker Hub
+
+Sau khi push thành công, vào https://hub.docker.com/r/quangthai87/mytholaptopv3 sẽ thấy 2 tags: `admin-ui` và `backend-ui`.
+
+### Trên máy khác - Pull image mới
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+---
+
+## Development Local
+
+### Yêu cầu
+
+- Node.js >= 20.0.0
+- pnpm >= 9.0.0 (`npm install -g pnpm@9`)
+- PostgreSQL >= 14
+- Redis >= 6
+
+### Setup
+
+```bash
+# Clone repository
 git clone https://github.com/quangthai87vn/mytholaptop-v3.git
 cd mytholaptop-v3
-git checkout main
-git pull
 
-# 3. Copy và cấu hình file môi trường
-cp .env.prod.example .env
-nano .env   # Chỉnh sửa các giá trị:
-            # - DATABASE_URL (PostgreSQL external)
-            # - JWT_SECRET
-            # - COOKIE_SECRET
-            # - NEXT_PUBLIC_MEDUSA_BACKEND_URL (https://backend.mtl.vn)
-
-# 4. Build và chạy
-docker compose -f docker-compose-prod.yml --env-file .env up -d
-
-# 5. Kiểm tra trạng thái
-docker compose -f docker-compose-prod.yml ps
-
-# 6. Xem logs
-docker compose -f docker-compose-prod.yml logs -f
-```
-
-**Services (Internal):**
-- Backend: `http://backend:9000`
-- Admin UI: `http://admin-ui:3000`
-- Redis: `redis://redis:6379`
-
-### Dùng Deploy Script
-
-```bash
-# Linux/Mac
-chmod +x deploy.sh
-./deploy.sh
-
-# Windows PowerShell
-.\deploy.ps1
-```
-
-### Database External
-
-**Lưu ý quan trọng:** PostgreSQL **KHÔNG** được include trong docker-compose. Bạn cần:
-
-1. **Tự cài PostgreSQL** trên server hoặc dùng **database server có sẵn**
-2. Cập nhật `DATABASE_URL` trong `.env`:
-
-```env
-DATABASE_URL=postgresql://user:password@your-postgres-host:5432/mytholaptop
-```
-
-3. Import database schema nếu cần:
-
-```bash
-psql -U your_user -d mytholaptop -f database.sql
-```
-
----
-
-## Build từ Source
-
-### Admin UI
-
-```bash
-cd apps/admin-ui
+# Cài dependencies
 pnpm install
-pnpm build
-# Output: .next/standalone/
+
+# Copy và chỉnh sửa .env
+cp apps/admin-ui/.env apps/admin-ui/.env.local
+# Hoặc dùng docker-compose-dev.yml cho dev
 ```
 
-### Backend
+### Chạy dev server
 
 ```bash
-cd apps/backend-ui/apps/backend
-pnpm install
-pnpm build
-# Output: .medusa/server/
+# Tất cả apps
+pnpm dev
+
+# Riêng từng app
+pnpm dev:admin    # Admin UI: http://localhost:7004
+pnpm dev:backend  # Backend: http://localhost:7003
 ```
 
-### Toàn bộ Monorepo
+### Docker dev (không cần cài Node)
 
 ```bash
-pnpm install
-pnpm build
+docker compose -f docker-compose-dev.yml up -d
+# Admin UI: http://localhost:7004
+# Backend: http://localhost:7003
+# Redis: localhost:6379
 ```
 
 ---
@@ -468,81 +494,60 @@ pnpm build
 ### `.env` (Production)
 
 ```env
-# Node Environment
 NODE_ENV=production
+DOCKER_HUB_USERNAME=quangthai87
 
-# Database (External PostgreSQL)
-DATABASE_URL=postgresql://mytholaptop_user:password@postgres-host:5432/mytholaptop
+# PostgreSQL
+DATABASE_URL=postgresql://user:password@host:5432/mytholaptop
 
-# Redis (Container)
-REDIS_URL=redis://redis:7005
-REDIS_PORT=7005
+# Redis
+REDIS_URL=redis://redis:6379
 
-# Backend
-BACKEND_PORT=7003
+# Security
 JWT_SECRET=your-random-secret-min-32-chars
 COOKIE_SECRET=your-random-secret-min-32-chars
 
-# CORS
-STORE_CORS=http://localhost:8000,http://localhost:7004
-ADMIN_CORS=http://localhost:7004,https://admin.mtl.vn
-AUTH_CORS=http://localhost:7004,http://localhost:7003,https://admin.mtl.vn
-
-# Admin UI
+# URLs
 NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://backend.mtl.vn
-ADMIN_PORT=7004
 ```
 
----
+### Database Schema
 
-## Tính năng chính
+Backend tự động chạy migrations khi start. Đảm bảo PostgreSQL có database `mytholaptop` đã tồn tại:
 
-### Admin Dashboard
-- [x] Dashboard tổng quan
-- [x] Quản lý sản phẩm (CRUD, filter, sort)
-- [x] Quản lý danh mục (parent/child tree)
-- [x] Quản lý thương hiệu, tags, attributes
-- [x] Responsive layout (mobile-first)
-
-### AI Content Studio
-- [x] Multi-provider AI (OpenAI, Gemini, Anthropic, Groq, Ollama)
-- [x] AI Task Routing
-- [x] Brand Voices
-- [x] System Prompt Templates
-- [x] AI Playground
-- [x] Streaming generation
-- [x] Content templates & calendar
-
-### Medusa Backend
-- [x] Medusa v2.15.3
-- [x] Custom modules (Company, Quote, Approval)
-- [x] JWT authentication
-- [x] Redis caching
-
-### Migration
-- [x] WooCommerce → Medusa migration
-- [x] WordPress media deduplication
-- [x] Product sync
-
-### Docker Deployment
-- [x] Multi-stage builds
-- [x] Production docker-compose
-- [x] Health checks
-- [x] Redis container
+```sql
+CREATE DATABASE mytholaptop;
+```
 
 ---
 
 ## Scripts
 
+### PowerShell (Windows)
+
+```powershell
+.\push_docker_hub.ps1              # Push Docker Hub (all)
+.\push_docker_hub.ps1 admin-ui    # Push admin-ui only
+.\push_docker_hub.ps1 backend-ui  # Push backend-ui only
+.\push_docker_hub.ps1 all v1.0.0  # Push với tag
+
+.\deploy.ps1                       # Deploy production
+```
+
+### Bash (Linux/Debian)
+
 ```bash
-pnpm dev              # Chạy tất cả apps
-pnpm dev:admin       # Admin UI (port 7004)
-pnpm dev:backend     # Backend (port 7003)
+./deploy-debian.sh                   # Deploy production (pull + run)
+```
+
+### pnpm
+
+```bash
+pnpm dev              # Tất cả apps
+pnpm dev:admin       # Admin UI
+pnpm dev:backend     # Backend
 pnpm build           # Build tất cả
-pnpm build:admin     # Build admin-ui
-pnpm build:backend   # Build backend
-pnpm lint            # Lint tất cả
-pnpm clean           # Xóa build outputs
+pnpm lint            # Lint
 ```
 
 ---
@@ -553,24 +558,44 @@ pnpm clean           # Xóa build outputs
 
 ```bash
 # Xem logs
-docker compose -f docker-compose-prod.yml logs backend
-docker compose -f docker-compose-prod.yml logs admin-ui
+docker compose logs backend
+docker compose logs admin-ui
 
-# Kiểm tra health
-docker compose -f docker-compose-prod.yml ps
+# Kiểm tra trạng thái
+docker compose ps
 
 # Restart
-docker compose -f docker-compose-prod.yml restart
+docker compose restart
 ```
 
-### Lỗi Build
+### Lỗi build
 
 ```bash
-# Xóa cache
+# Xóa toàn bộ builder cache
 docker builder prune -a
 
 # Rebuild không cache
-docker compose -f docker-compose-prod.yml build --no-cache
+docker compose build --no-cache
+```
+
+### Lỗi database
+
+```bash
+# Kiểm tra kết nối PostgreSQL
+docker compose exec backend nc -zv your-postgres-host 5432
+
+# Chạy migrations thủ công
+docker compose exec backend medusa migrations run
+```
+
+### Pull Docker Hub thất bại (rate limit)
+
+```bash
+# Login Docker Hub (tăng rate limit)
+docker login
+
+# Retry pull
+docker compose pull
 ```
 
 ---

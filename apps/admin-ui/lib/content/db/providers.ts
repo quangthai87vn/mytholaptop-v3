@@ -3,36 +3,41 @@
  */
 
 import { query } from "@/lib/db";
+import { getCacheOrFetch, invalidateAICache } from "./cache";
 import type { AIProvider, AIProviderType } from "../types";
 import type { ProviderCard } from "@/types/ai-operating";
 
 export async function getAllProviders(): Promise<AIProvider[]> {
-  const { rows } = await query<AIProvider>(
-    "SELECT * FROM ai_providers WHERE is_deleted = false ORDER BY sort_order ASC"
-  );
-  return rows;
+  return getCacheOrFetch("ai:providers", async () => {
+    const { rows } = await query<AIProvider>(
+      "SELECT * FROM ai_providers WHERE is_deleted = false ORDER BY sort_order ASC"
+    );
+    return rows;
+  });
 }
 
 /** Tra ve ProviderCard[] voi field `type` thay vi `provider`.
  *  Chi lay provider chua xoa (is_deleted = false). */
 export async function getAllProviderCards(): Promise<ProviderCard[]> {
-  // Use status column (new schema) as active flag; ORDER BY is_default first
-  const { rows } = await query<AIProvider & { is_active: boolean; sort_order: number; status: string }>(
-    "SELECT * FROM ai_providers WHERE is_deleted = false ORDER BY is_default DESC, sort_order ASC"
-  );
-  return rows.map((r) => ({
-    id: r.id,
-    type: (r.provider ?? "openai") as ProviderCard["type"],
-    display_name: r.display_name ?? r.provider ?? "Unknown",
-    name: r.display_name ?? r.provider ?? "Unknown",  // alias
-    slug: r.slug ?? r.provider ?? "",
-    base_url: (r.base_url ?? null) as string | null,
-    // Use status column as primary flag (new schema), is_active as fallback
-    is_active: r.status === "active" || (r.is_active ?? false),
-    sort_order: r.sort_order ?? 0,
-    model_name: r.model_name ?? undefined,
-    temperature: r.temperature ?? undefined,
-  }));
+  return getCacheOrFetch("ai:provider-cards", async () => {
+    // Use status column (new schema) as active flag; ORDER BY is_default first
+    const { rows } = await query<AIProvider & { is_active: boolean; sort_order: number; status: string }>(
+      "SELECT * FROM ai_providers WHERE is_deleted = false ORDER BY is_default DESC, sort_order ASC"
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      type: (r.provider ?? "openai") as ProviderCard["type"],
+      display_name: r.display_name ?? r.provider ?? "Unknown",
+      name: r.display_name ?? r.provider ?? "Unknown",  // alias
+      slug: r.slug ?? r.provider ?? "",
+      base_url: (r.base_url ?? null) as string | null,
+      // Use status column as primary flag (new schema), is_active as fallback
+      is_active: r.status === "active" || (r.is_active ?? false),
+      sort_order: r.sort_order ?? 0,
+      model_name: r.model_name ?? undefined,
+      temperature: r.temperature ?? undefined,
+    }));
+  });
 }
 
 export async function getProviderById(id: number): Promise<AIProvider | null> {
@@ -85,6 +90,7 @@ export async function createProvider(data: {
       data.api_key_iv ?? null,
     ]
   );
+  invalidateAICache();
   return rows[0];
 }
 
@@ -127,6 +133,7 @@ export async function updateProvider(
     `UPDATE ai_providers SET ${fields.join(", ")} WHERE id = $${idx} RETURNING *`,
     values
   );
+  invalidateAICache();
   return rows[0] || null;
 }
 
@@ -138,6 +145,7 @@ export async function setActiveProvider(
     `UPDATE ai_providers SET is_active = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
     [active, id]
   );
+  invalidateAICache();
   return rows[0] || null;
 }
 

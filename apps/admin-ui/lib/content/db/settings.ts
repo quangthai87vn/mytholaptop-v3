@@ -4,6 +4,7 @@
 
 import { query } from "@/lib/db";
 import { encrypt, decrypt } from "./encryption";
+import { invalidateAICache } from "./cache";
 import type { AISettings, AISettingsInput, AISettingsOutput } from "../types";
 
 export async function getSettings(): Promise<AISettingsOutput | null> {
@@ -44,40 +45,61 @@ export async function saveSettings(
     apiKeyIv = iv;
   }
 
-  // Upsert - update if exists, insert if not
-  const { rows } = await query<AISettings>(
-    `INSERT INTO ai_settings
-       (provider_id, base_url, model_name, api_key_encrypted, api_key_iv,
-        temperature, max_tokens, brand_voice, prompt_rules, safety_rules, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     ON CONFLICT (id) DO UPDATE SET
-       provider_id = EXCLUDED.provider_id,
-       base_url = EXCLUDED.base_url,
-       model_name = EXCLUDED.model_name,
-       api_key_encrypted = COALESCE(EXCLUDED.api_key_encrypted, ai_settings.api_key_encrypted),
-       api_key_iv = COALESCE(EXCLUDED.api_key_iv, ai_settings.api_key_iv),
-       temperature = EXCLUDED.temperature,
-       max_tokens = EXCLUDED.max_tokens,
-       brand_voice = EXCLUDED.brand_voice,
-       prompt_rules = EXCLUDED.prompt_rules,
-       safety_rules = EXCLUDED.safety_rules,
-       is_active = EXCLUDED.is_active,
-       updated_at = NOW()
-     RETURNING *`,
-    [
-      data.provider_id,
-      data.base_url || null,
-      data.model_name,
-      apiKeyEncrypted,
-      apiKeyIv,
-      data.temperature,
-      data.max_tokens,
-      data.brand_voice || null,
-      data.prompt_rules || null,
-      data.safety_rules || null,
-      data.is_active ?? true,
-    ]
+  // First, try to update existing row by provider_id
+  const updateFields: string[] = [
+    "base_url = $2",
+    "model_name = $3",
+    "api_key_encrypted = $4",
+    "api_key_iv = $5",
+    "temperature = $6",
+    "max_tokens = $7",
+    "brand_voice = $8",
+    "prompt_rules = $9",
+    "safety_rules = $10",
+    "is_active = $11",
+    "updated_at = NOW()",
+  ];
+  const updateValues = [
+    data.base_url || null,
+    data.model_name,
+    apiKeyEncrypted,
+    apiKeyIv,
+    data.temperature,
+    data.max_tokens,
+    data.brand_voice || null,
+    data.prompt_rules || null,
+    data.safety_rules || null,
+    data.is_active ?? true,
+  ];
+
+  const { rows: existingRows } = await query<AISettings>(
+    "SELECT id FROM ai_settings WHERE provider_id = $1 LIMIT 1",
+    [data.provider_id]
   );
+
+  let savedId: number;
+
+  if (existingRows[0]) {
+    // UPDATE existing row
+    savedId = existingRows[0].id;
+    await query(
+      `UPDATE ai_settings SET ${updateFields.join(", ")} WHERE id = $1`,
+      [savedId, ...updateValues]
+    );
+  } else {
+    // INSERT new row
+    const { rows: insertedRows } = await query<AISettings>(
+      `INSERT INTO ai_settings
+         (provider_id, base_url, model_name, api_key_encrypted, api_key_iv,
+          temperature, max_tokens, brand_voice, prompt_rules, safety_rules, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id`,
+      [data.provider_id, ...updateValues]
+    );
+    savedId = insertedRows[0].id;
+  }
+
+  invalidateAICache();
 
   // Re-fetch with provider info
   const { rows: fullRows } = await query<AISettings>(
@@ -85,12 +107,12 @@ export async function saveSettings(
      FROM ai_settings s
      LEFT JOIN ai_providers p ON s.provider_id = p.id
      WHERE s.id = $1`,
-    [rows[0].id]
+    [savedId]
   );
 
   const row = fullRows[0];
   let apiKey: string | null = null;
-  if (row.api_key_encrypted && row.api_key_iv) {
+  if (row?.api_key_encrypted && row?.api_key_iv) {
     try {
       apiKey = decrypt(row.api_key_encrypted, row.api_key_iv);
     } catch {

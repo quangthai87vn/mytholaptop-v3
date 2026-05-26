@@ -115,6 +115,36 @@ export async function POST(request: NextRequest) {
       CREATE INDEX IF NOT EXISTS idx_migration_logs_created_at ON migration_logs(created_at DESC);
     `);
 
+    // Create app_settings table (WooCommerce, Medusa, Company credentials)
+    await exec(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        id          SERIAL PRIMARY KEY,
+        key         VARCHAR(100) NOT NULL UNIQUE,
+        value       TEXT NOT NULL,
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_app_settings_key ON app_settings(key)
+    `);
+
+    // Seed default app settings if not exist
+    await exec(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES ('wooCommerce', '{"wordpressUrl":"","consumerKey":"","consumerSecret":""}', NOW())
+      ON CONFLICT (key) DO NOTHING
+    `);
+    await exec(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES ('medusa', '{"backendUrl":"","adminEmail":"","adminPassword":"","adminApiKey":""}', NOW())
+      ON CONFLICT (key) DO NOTHING
+    `);
+    await exec(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES ('company', '{"name":"","website":"","phone":"","logoUrl":"","address":""}', NOW())
+      ON CONFLICT (key) DO NOTHING
+    `);
+
     return NextResponse.json({
       success: true,
       message: "Migration tables initialized successfully",
