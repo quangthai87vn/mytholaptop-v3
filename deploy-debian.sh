@@ -21,8 +21,8 @@ set -e
 # --- Config ---
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
-BACKEND_IMAGE="mytholaptopv3/backend-ui"
-ADMIN_IMAGE="mytholaptopv3/admin-ui"
+BACKEND_IMAGE="quangthai87/mytholaptopv3:backend-ui"
+ADMIN_IMAGE="quangthai87/mytholaptopv3:admin-ui"
 
 BACKEND_PORT="${BACKEND_PORT:-7003}"
 ADMIN_PORT="${ADMIN_PORT:-7004}"
