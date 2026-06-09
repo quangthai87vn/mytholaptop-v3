@@ -201,7 +201,7 @@ export const useAIStore = create<AIStoreState & AIStoreActions>()(
       // Empty string = no provider selected. UI must show empty state.
       // DB providers will auto-select the first one via hydrate().
       selectedProviderId: "",
-      activeTab: "providers",
+      activeTab: "connections",
       isInspectorOpen: true,
       isDirty: false,
       dirtyFields: new Set<string>(),

@@ -132,7 +132,7 @@ export function BrandVoiceEditor({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Palette className="size-4 text-primary" />
-              Brand Presets
+              Phong cách nội dung
             </CardTitle>
             <Button
               size="sm"
@@ -214,7 +214,7 @@ export function BrandVoiceEditor({
             <CardContent className="space-y-6">
               {/* Tone Sliders */}
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">Tone Adjustments</h4>
+                <h4 className="text-sm font-medium">Tinh chỉnh giọng điệu</h4>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">

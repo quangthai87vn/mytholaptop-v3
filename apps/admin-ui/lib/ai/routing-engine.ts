@@ -472,14 +472,3 @@ export function getEffectiveModelLabel(
   }
   return model || "—";
 }
-
-// ── Backward compatibility exports ────────────────────────────────────────────
-// Re-export from routing-legacy.ts for existing consumers
-export {
-  routeToModel,
-  getModelLabel,
-  getProviderLabel,
-  type RoutingContext,
-  type RoutingDecision,
-  type AIGeneratedStrategy,
-} from "../routing-legacy";

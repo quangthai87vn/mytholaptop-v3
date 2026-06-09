@@ -6,10 +6,16 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
+import { requirePermission } from "@/lib/auth/require-permission";
 import type { SystemPromptTemplate } from "@/types/ai-operating";
 import { DEFAULT_VI_SYSTEM_PROMPT } from "@/types/ai-operating";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { rows } = await query<SystemPromptTemplate>(
       "SELECT * FROM ai_system_prompt_templates ORDER BY is_default DESC, id ASC"
@@ -35,6 +41,15 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const body = await req.json();
     const { name, description, prompt_text, is_active, is_default } = body;
@@ -61,6 +76,15 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const body = await req.json();
     const { id, name, description, prompt_text, is_active, is_default } = body;
@@ -92,6 +116,15 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const { searchParams } = req.nextUrl;
     const id = searchParams.get("id");

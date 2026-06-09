@@ -4,11 +4,10 @@
  * PUT  /api/ai/settings/all - Save toàn bộ config
  */
 
-// Disable caching — always query fresh data
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
+import { requirePermission } from "@/lib/auth/require-permission";
 import { query } from "@/lib/db";
 import { encrypt, decrypt } from "@/lib/content/db/encryption";
 import { getAllRoutingRules } from "@/lib/content/db/task-routes";
@@ -33,7 +32,10 @@ export function maskApiKey(key: string | null): string {
 
 // ── GET: Load toàn bộ config ────────────────────────────────────────────────
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   // Helper: safe query with error logging
   const safeQuery = async <T,>(sql: string, fallback: T[] = []): Promise<{ rows: T[] }> => {
     try { return await query<T>(sql); }
@@ -202,6 +204,15 @@ export async function GET() {
 // ── PUT: Save toàn bộ config ─────────────────────────────────────────────────
 
 export async function PUT(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const body = await req.json();
 

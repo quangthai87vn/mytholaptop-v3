@@ -6,8 +6,16 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import type { AIProviderType } from "@/lib/content/types";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requirePermission } from "@/lib/auth/require-permission";
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const body = await req.json();
     const { provider_type, base_url, api_key } = body;

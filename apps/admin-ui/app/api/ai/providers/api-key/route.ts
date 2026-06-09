@@ -1,18 +1,26 @@
 /**
- * Provider API Key API
- * GET /api/ai/providers/api-key?id=  - Lấy masked key (chỉ frontend)
- * POST /api/ai/providers/api-key    - Decrypt key khi cần gọi AI (server-side only)
+ * GET /api/ai/providers/api-key — Lấy masked key (chỉ frontend)
+ * POST /api/ai/providers/api-key — Decrypt key khi cần gọi AI (server-side only)
+ * PUT /api/ai/providers/api-key — Cập nhật API key (encrypt trước khi lưu)
+ *
+ * P5.10 Security Audit: All methods now have requireAdminAuth + requireCsrf.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { encrypt, decrypt } from "@/lib/content/db/encryption";
 import { maskApiKey } from "@/app/api/ai/settings/all/route";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
+import { requirePermission } from "@/lib/auth/require-permission";
 
 /**
  * GET: Trả masked key về frontend — KHÔNG bao giờ trả full key
  */
 export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { searchParams } = req.nextUrl;
     const id = searchParams.get("id");
@@ -63,6 +71,15 @@ export async function GET(req: NextRequest) {
  * Response: { provider_id, provider, api_key } — KHÔNG trả về client thông thường
  */
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const body = await req.json();
     const { id } = body;
@@ -113,6 +130,15 @@ export async function POST(req: NextRequest) {
  * Body: { id: number, api_key: string }
  */
 export async function PUT(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  // P5.10 Security Audit: CSRF protection added. Without this, an attacker could
+  // inject a malicious API key into providers via a crafted form submission.
+
   try {
     const body = await req.json();
     const { id, api_key } = body;

@@ -11,6 +11,9 @@ import {
   createProvider,
 } from "@/lib/content/db/provider-service";
 import { query } from "@/lib/db";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
+import { requirePermission } from "@/lib/auth/require-permission";
 import type { AIProviderInput } from "@/lib/content/types";
 import type { ConnectionStatus, ProviderGroupSlug } from "@/lib/content/types";
 
@@ -55,6 +58,9 @@ async function ensureMigration() {
 }
 
 export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     await ensureMigration();
 
@@ -95,6 +101,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     let body = await req.json() as AIProviderInput;
     console.log("[AI Providers POST] body:", JSON.stringify(body));

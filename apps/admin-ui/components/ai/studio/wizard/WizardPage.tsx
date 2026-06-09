@@ -60,8 +60,8 @@ export function WizardPage() {
             <div className="min-w-0">
               <p className="text-xs font-semibold text-foreground truncate">
                 {wizardStep === "product" && "Chọn sản phẩm"}
-                {wizardStep === "routing" && "Cấu hình AI"}
-                {wizardStep === "preview" && "Xem trước prompt"}
+                {wizardStep === "routing" && "AI đang được chọn tự động"}
+                {wizardStep === "preview" && "Xem trước nội dung"}
                 {wizardStep === "generate" && "Tạo nội dung"}
                 {wizardStep === "review" && "Hoàn tất"}
               </p>

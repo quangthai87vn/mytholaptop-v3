@@ -9,6 +9,8 @@
 
 import { NextRequest } from "next/server";
 import { resolveRouting, type AIGeneratorTask } from "@/lib/ai/routing-engine";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requirePermission } from "@/lib/auth/require-permission";
 import { createProviderFromRouting } from "@/lib/ai/provider-service";
 import { buildChatMessages } from "@/lib/ai/prompt-engine";
 import { buildStrategy } from "@/lib/ai/generation-service";
@@ -18,7 +20,7 @@ import {
   resolveSystemPrompt,
 } from "@/lib/ai/generation-resolvers";
 import { getAllRoutingRules } from "@/lib/content/db/task-routes";
-import { getAllProviderCards, getDecryptedApiKey } from "@/lib/content/db/providers";
+import { getAllProviderCardsLegacy, getDecryptedApiKeyLegacy } from "@/lib/content/db/provider-service";
 import { getAllBrandVoices } from "@/lib/content/db/brand-voices";
 import { getSafetyRules } from "@/lib/content/db/safety-rules";
 import { getAllSystemPrompts } from "@/lib/content/db/system-prompts";
@@ -87,6 +89,12 @@ function buildTitle(productName: string, contentType: string): string {
 // ── Main Handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const permError = requirePermission(req, "ai_generate");
+  if (permError) return permError;
+
   const startTime = Date.now();
 
   let body: {
@@ -145,7 +153,7 @@ export async function POST(req: NextRequest) {
   const [taskRoutes, providers, brandVoices, safetyRules, systemPrompts] =
     await Promise.all([
       getAllRoutingRules().catch(() => [] as RoutingRule[]),
-      getAllProviderCards().catch(() => [] as ProviderCard[]),
+      getAllProviderCardsLegacy().catch(() => [] as ProviderCard[]),
       getAllBrandVoices().catch(() => [] as BrandVoice[]),
       getSafetyRules().catch(() => [] as SafetyRule[]),
       getAllSystemPrompts().catch(() => [] as SystemPromptTemplate[]),
@@ -305,7 +313,7 @@ export async function POST(req: NextRequest) {
       null;
   }
 
-  const apiKey = dbProvider ? await getDecryptedApiKey(dbProvider.id) : null;
+  const apiKey = dbProvider ? await getDecryptedApiKeyLegacy(dbProvider.id) : null;
   const provider = createProviderFromRouting(
     routing,
     dbProvider ?? undefined,

@@ -405,7 +405,8 @@ export type AITaskType =
   | "image_prompt"
   | "zalo_message"
   | "product_description"
-  | "email_marketing";
+  | "email_marketing"
+  | "task_assistant";
 
 /**
  * RoutingRule — new interface for routing rules stored in ai_task_routes.
@@ -515,8 +516,9 @@ export const TASK_ROUTE_LABELS: Record<AITaskType, string> = {
   video_script: "Kịch bản Video",
   image_prompt: "Prompt Hình ảnh",
   zalo_message: "Tin nhắn Zalo",
-  product_description: "Mô tả sản phẩm",
   email_marketing: "Email Marketing",
+  product_description: "Mô tả sản phẩm",
+  task_assistant: "AI Task Assistant",
 };
 
 /**

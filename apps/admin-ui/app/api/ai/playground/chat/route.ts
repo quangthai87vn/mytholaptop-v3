@@ -6,9 +6,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAIProvider } from "@/lib/content/ai/providers";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requirePermission } from "@/lib/auth/require-permission";
 import type { AIProviderType } from "@/lib/content/types";
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const permError = requirePermission(req, "ai_generate");
+  if (permError) return permError;
+
   try {
     const body = await req.json();
     const {

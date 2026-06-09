@@ -11,11 +11,17 @@ import {
   createModel,
   deleteModel,
 } from "@/lib/content/db/provider-service";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
+import { requirePermission } from "@/lib/auth/require-permission";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { id } = await params;
     const providerId = parseInt(id, 10);
@@ -34,6 +40,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const { id } = await params;
     const providerId = parseInt(id, 10);
@@ -57,6 +72,15 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const { searchParams } = req.nextUrl;
     const modelId = searchParams.get("id");

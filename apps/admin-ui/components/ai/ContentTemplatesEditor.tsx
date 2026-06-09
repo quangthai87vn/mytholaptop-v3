@@ -995,7 +995,7 @@ export function ContentTemplatesEditor({
       <div>
         <h2 className="text-base font-semibold flex items-center gap-2">
           <Sparkles className="size-4 text-primary" />
-          Content Templates
+          Prompt Templates
         </h2>
         <p className="text-xs text-muted-foreground mt-0.5">
           Quản lý System Prompts, Prompt Rules và Safety Rules cho AI generation

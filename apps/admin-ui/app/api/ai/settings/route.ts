@@ -6,9 +6,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSettings, saveSettings } from "@/lib/content/db/settings";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
+import { requirePermission } from "@/lib/auth/require-permission";
 import type { AISettingsInput } from "@/lib/content/types";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const settings = await getSettings();
     return NextResponse.json({ data: settings });
@@ -19,6 +25,15 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const body = await req.json() as AISettingsInput;
 

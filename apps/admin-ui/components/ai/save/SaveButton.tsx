@@ -69,14 +69,14 @@ export function SaveButton({ className }: { className?: string }) {
       console.log("[SaveButton] Saving with", taskRoutes.length, "routes");
       taskRoutes.forEach(r => {
         const anyR = r as any;
-        console.log(`  - ${r.task_type}: provider_id=${anyR.primary_provider_id ?? "null"}, model=${anyR.primary_model_override ?? "null"}`);
+        console.log(`  - ${r.task_type}: provider_id=${anyR.primary_provider_id ?? "null"}, model=${anyR.primary_model_override ?? anyR.model_name ?? "null"}`);
       });
     }
 
     saveMutation.mutate({
       providers: providers.map((p) => {
-        const type = p.slug || p.type;
-        const rc = runtimeConfigs[type] || runtimeConfigs[p.type] || {};
+        const providerKey = String(p.id);
+        const rc = runtimeConfigs[providerKey] || {};
         return {
           id: p.id,
           type: p.type,
@@ -85,9 +85,9 @@ export function SaveButton({ className }: { className?: string }) {
           group_slug: p.group_slug,
           base_url: p.base_url,
           status: p.status ?? (p.is_active ? "active" : "inactive"),
+          is_active: p.is_active ?? (p.status === "active"),
           is_default: p.is_default ?? false,
-          is_active: p.is_active,
-          // Runtime params from store
+          // Runtime params from store (keyed by provider id)
           model_name: rc.model_name ?? p.model_name ?? null,
           temperature: rc.temperature ?? p.temperature ?? null,
           streaming_enabled: rc.enable_streaming ?? false,

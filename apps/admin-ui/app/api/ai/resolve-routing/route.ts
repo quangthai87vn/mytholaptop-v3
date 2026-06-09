@@ -22,6 +22,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouting, type AIGeneratorTask } from "@/lib/ai/routing-engine";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
 import type { ContentPlatform } from "@/types/content";
 import type {
   StudioContentType,
@@ -41,6 +42,9 @@ interface ResolveBody {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const body: ResolveBody = await req.json();
 

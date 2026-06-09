@@ -8,6 +8,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
+import { requirePermission } from "@/lib/auth/require-permission";
 import {
   getProviderById,
   updateProvider,
@@ -32,9 +35,12 @@ export const revalidate = 0;
 // ── GET ─────────────────────────────────────────────────────────────────────
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { id } = await params;
     const providerId = parseInt(id, 10);
@@ -87,6 +93,15 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const { id } = await params;
     const providerId = parseInt(id, 10);
@@ -150,9 +165,18 @@ export async function PUT(
 // ── DELETE (Hard) ────────────────────────────────────────────────────────────
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const { id } = await params;
     const providerId = parseInt(id, 10);
@@ -170,6 +194,18 @@ export async function DELETE(
     // Check usage status for frontend warnings
     const check = await checkProviderDelete(providerId);
 
+    // Block deletion if system provider
+    if (!check.canDelete) {
+      return NextResponse.json(
+        {
+          error: check.reason,
+          isSystem: check.isSystem,
+          canDelete: false,
+        },
+        { status: 409 }
+      );
+    }
+
     // Perform hard delete (routing rules are cleared by deleteProvider, models/configs deleted)
     const result = await deleteProvider(providerId);
     if (!result.success) {
@@ -185,6 +221,7 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       deletedProvider: { id: providerId, name: existing.name },
+      isSystem: check.isSystem,
       isDefault: check.isDefault,
       isInUse: check.isInUse,
       affectedRules: parseInt(affectedRules[0]?.count ?? "0", 10),
@@ -205,6 +242,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_engine.manage");
+  if (permError) return permError;
+
   try {
     const { id } = await params;
     const providerId = parseInt(id, 10);

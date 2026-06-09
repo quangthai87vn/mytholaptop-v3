@@ -17,7 +17,7 @@ import type {
   ProviderCard,
   BrandPreset,
 } from "@/types/ai-operating";
-import { getAllProviderCards, getDecryptedApiKey } from "@/lib/content/db/providers";
+import { getAllProviderCardsLegacy, getDecryptedApiKeyLegacy } from "@/lib/content/db/provider-service";
 import { getAllBrandVoices, getActiveBrandVoice } from "@/lib/content/db/brand-voices";
 import { getSafetyRules } from "@/lib/content/db/safety-rules";
 import { getAllSystemPrompts } from "@/lib/content/db/system-prompts";
@@ -185,7 +185,7 @@ export async function generateContentWithRouting(
     }
 
     // Decrypt API key using provider DB id (not type slug)
-    const apiKey = dbProvider ? await getDecryptedApiKey(dbProvider.id) : null;
+    const apiKey = dbProvider ? await getDecryptedApiKeyLegacy(dbProvider.id) : null;
     const provider = createProviderFromRouting(
       finalRouting,
       dbProvider ?? undefined,

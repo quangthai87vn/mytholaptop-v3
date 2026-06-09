@@ -49,6 +49,8 @@ import {
   Volume2,
   Plus,
   Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import type {
   TaskRoute,
@@ -74,6 +76,18 @@ const TASK_LABELS: Record<AITaskType, string> = {
   zalo_message: "Tin nhắn Zalo",
   product_description: "Mô tả sản phẩm",
   email_marketing: "Email Marketing",
+  task_assistant: "AI Task Assistant",
+};
+
+const TASK_HINTS: Record<AITaskType, string> = {
+  facebook_content: "Nội dung bài đăng Facebook",
+  seo_article: "Bài viết tối ưu tìm kiếm",
+  video_script: "Script quảng cáo / YouTube",
+  image_prompt: "Mô tả cho AI tạo hình",
+  zalo_message: "Tin nhắn quảng cáo Zalo",
+  product_description: "Bài viết giới thiệu sản phẩm",
+  email_marketing: "Email quảng cáo / newsletter",
+  task_assistant: "AI Assistant trong Task",
 };
 
 /**
@@ -282,6 +296,7 @@ function dbTaskType(taskType: AITaskType): AITaskType {
     zalo_message: "zalo_message",
     product_description: "product_description",
     email_marketing: "email_marketing",
+    task_assistant: "task_assistant",
   };
   return map[taskType] ?? taskType;
 }
@@ -511,6 +526,7 @@ export function TaskRoutingTable({
   const [form, setForm] = useState<RoutingForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [addingType, setAddingType] = useState<AITaskType | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Keep form in sync when providers list changes (e.g. new connection added)
   useEffect(() => {
@@ -748,23 +764,11 @@ export function TaskRoutingTable({
             <div>
               <CardTitle className="text-base flex items-center gap-2">
                 <Zap className="size-4 text-primary" />
-                AI Task Routing
+                AI cho từng loại nội dung
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                Gán AI Engine cho từng loại nội dung. Để trống model sẽ dùng mặc định của Engine.
+                Chọn AI Engine và phong cách mặc định cho mỗi loại nội dung.
               </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs gap-1.5 font-medium"
-                disabled={saving}
-                onClick={() => setAddingType(null)}
-              >
-                <Plus className="size-3" />
-                Thêm Task
-              </Button>
             </div>
           </div>
         </CardHeader>
@@ -773,13 +777,10 @@ export function TaskRoutingTable({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Task</TableHead>
+                  <TableHead>Loại nội dung</TableHead>
                   <TableHead>AI Engine</TableHead>
-                  <TableHead>Brand Voice</TableHead>
-                  <TableHead>System Prompt</TableHead>
                   <TableHead>Model</TableHead>
-                  <TableHead>Sáng tạo</TableHead>
-                  <TableHead>Độ dài</TableHead>
+                  <TableHead>Phong cách</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead className="w-[60px]"></TableHead>
                 </TableRow>
@@ -800,10 +801,6 @@ export function TaskRoutingTable({
                   const modelName = rule?.primary_model_override
                     || provider?.model_name
                     || "";
-
-                  const creativity = temperatureToCreativity(rule?.temperature_override ?? null);
-                  const contentLength = tokensToContentLength(rule?.max_tokens_override ?? null);
-
                   const hasWarning = !provider;
 
                   return (
@@ -811,14 +808,16 @@ export function TaskRoutingTable({
                       key={route.id ?? route.task_type}
                       className={!route.is_active ? "opacity-50" : ""}
                     >
-                      {/* Task */}
-                      <TableCell className="font-medium text-sm max-w-[140px]">
-                        <span
-                          className="truncate block"
-                          title={TASK_LABELS[route.task_type as AITaskType] ?? route.task_type}
-                        >
-                          {TASK_LABELS[route.task_type as AITaskType] || route.task_type}
-                        </span>
+                      {/* Content Type */}
+                      <TableCell className="max-w-[160px]">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-medium truncate block">
+                            {TASK_LABELS[route.task_type as AITaskType] || route.task_type}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground truncate block">
+                            {TASK_HINTS[route.task_type as AITaskType] || ""}
+                          </span>
+                        </div>
                       </TableCell>
 
                       {/* AI Engine */}
@@ -837,42 +836,6 @@ export function TaskRoutingTable({
                         )}
                       </TableCell>
 
-                      {/* Brand Voice */}
-                      <TableCell>
-                        {(() => {
-                          const preset = rule?.brand_preset ?? (route as TaskRoute).brand_preset;
-                          const bv = brandVoices.find((b) => b.preset === preset);
-                          if (!preset) return <span className="text-xs text-muted-foreground">—</span>;
-                          return (
-                            <Badge
-                              variant="outline"
-                              className="text-xs"
-                              title={bv?.name || preset}
-                            >
-                              {bv?.name || preset}
-                            </Badge>
-                          );
-                        })()}
-                      </TableCell>
-
-                      {/* System Prompt */}
-                      <TableCell>
-                        {(() => {
-                          const spId = rule?.system_prompt_id ?? (route as TaskRoute).system_prompt_id;
-                          const sp = systemPrompts.find((s) => s.id === spId);
-                          if (!spId) return <span className="text-xs text-muted-foreground">—</span>;
-                          return (
-                            <Badge
-                              variant="outline"
-                              className="text-xs"
-                              title={sp?.name || String(spId)}
-                            >
-                              {sp?.name || `ID: ${spId}`}
-                            </Badge>
-                          );
-                        })()}
-                      </TableCell>
-
                       {/* Model */}
                       <TableCell>
                         <span className="text-xs font-mono text-muted-foreground">
@@ -880,28 +843,17 @@ export function TaskRoutingTable({
                         </span>
                       </TableCell>
 
-                      {/* Creativity */}
+                      {/* Phong cach */}
                       <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-muted-foreground">
-                            {creativity < 30 ? "Chính xác" :
-                             creativity < 60 ? "Cân bằng" :
-                             creativity < 80 ? "Sáng tạo" : "Rất sáng tạo"}
-                          </span>
-                          <div className="w-12 h-1 rounded-full bg-muted overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-primary transition-all"
-                              style={{ width: `${creativity}%` }}
-                            />
-                          </div>
-                        </div>
-                      </TableCell>
-
-                      {/* Content Length */}
-                      <TableCell>
-                        <span className="text-xs text-muted-foreground">
-                          {CONTENT_LENGTH_LABEL[contentLength]}
-                        </span>
+                        {(() => {
+                          const preset = rule?.brand_preset ?? (route as TaskRoute).brand_preset;
+                          if (!preset) return <span className="text-xs text-muted-foreground">—</span>;
+                          return (
+                            <Badge variant="outline" className="text-xs">
+                              {preset}
+                            </Badge>
+                          );
+                        })()}
                       </TableCell>
 
                       {/* Status */}
@@ -914,61 +866,46 @@ export function TaskRoutingTable({
 
                       {/* Actions */}
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => {
-                              if (rule) {
-                                setForm(buildFormFromRule(rule, legacyType, activeProviders));
-                                setEditing(rule);
-                                setEditingLegacyType(legacyType);
-                              } else {
-                                const legacyRule: RoutingRule = {
-                                  id: route.id,
-                                  task_type: route.task_type,
-                                  task_label: route.task_label,
-                                  primary_provider_id: null,
-                                  primary_model_override: (route as TaskRoute).model_name || null,
-                                  fallback_provider_id: null,
-                                  fallback_model_override: null,
-                                  temperature_override: (route as TaskRoute).temperature !== 0.7
-                                    ? (route as TaskRoute).temperature
-                                    : null,
-                                  max_tokens_override: (route as TaskRoute).max_tokens !== 2048
-                                    ? (route as TaskRoute).max_tokens
-                                    : null,
-                                  top_p_override: null,
-                                  priority: (route as TaskRoute).priority,
-                                  system_prompt_id: (route as TaskRoute).system_prompt_id ?? null,
-                                  brand_preset: (route as TaskRoute).brand_preset ?? null,
-                                  is_active: route.is_active,
-                                  created_at: route.created_at,
-                                  updated_at: route.updated_at,
-                                };
-                                setForm(buildFormFromRule(legacyRule, legacyType, activeProviders));
-                                setEditing(legacyRule);
-                                setEditingLegacyType(legacyType);
-                              }
-                            }}
-                          >
-                            <Settings2 className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 text-destructive/60 hover:text-destructive"
-                            onClick={() => {
-                              const label = TASK_LABELS[route.task_type as AITaskType] || route.task_type;
-                              if (confirm(`Xóa routing "${label}"?\nHành động này sẽ xóa luôn cấu hình AI đã lưu.`)) {
-                                handleDeleteRoute(route as TaskRoute);
-                              }
-                            }}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          onClick={() => {
+                            if (rule) {
+                              setForm(buildFormFromRule(rule, legacyType, activeProviders));
+                              setEditing(rule);
+                              setEditingLegacyType(legacyType);
+                            } else {
+                              const legacyRule: RoutingRule = {
+                                id: route.id,
+                                task_type: route.task_type,
+                                task_label: route.task_label,
+                                primary_provider_id: null,
+                                primary_model_override: (route as TaskRoute).model_name || null,
+                                fallback_provider_id: null,
+                                fallback_model_override: null,
+                                temperature_override: (route as TaskRoute).temperature !== 0.7
+                                  ? (route as TaskRoute).temperature
+                                  : null,
+                                max_tokens_override: (route as TaskRoute).max_tokens !== 2048
+                                  ? (route as TaskRoute).max_tokens
+                                  : null,
+                                top_p_override: null,
+                                priority: (route as TaskRoute).priority,
+                                system_prompt_id: (route as TaskRoute).system_prompt_id ?? null,
+                                brand_preset: (route as TaskRoute).brand_preset ?? null,
+                                is_active: route.is_active,
+                                created_at: route.created_at,
+                                updated_at: route.updated_at,
+                              };
+                              setForm(buildFormFromRule(legacyRule, legacyType, activeProviders));
+                              setEditing(legacyRule);
+                              setEditingLegacyType(legacyType);
+                            }
+                          }}
+                        >
+                          <Settings2 className="size-3.5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -1027,6 +964,7 @@ export function TaskRoutingTable({
             setEditing(null);
             setEditingLegacyType(undefined);
             setForm(null);
+            setShowAdvanced(false);
           }
         }}
       >
@@ -1034,11 +972,11 @@ export function TaskRoutingTable({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Zap className="size-4 text-primary" />
-              Cấu hình AI:{" "}
+              AI cho từng loại nội dung:{" "}
               {editing && (TASK_LABELS[editing.task_type as AITaskType] || editing.task_type)}
             </DialogTitle>
             <DialogDescription>
-              Chọn AI Engine và style cho nội dung này.
+              Chọn AI Engine và phong cách cho nội dung này.
             </DialogDescription>
           </DialogHeader>
 
@@ -1286,6 +1224,71 @@ export function TaskRoutingTable({
                     </Select>
                   </div>
                 </div>
+              </div>
+
+              {/* Advanced Settings toggle */}
+              <div className="border-t pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showAdvanced ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                  Cài đặt nâng cao
+                </button>
+                {showAdvanced && (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-[10px] text-muted-foreground">
+                      Dành cho admin kỹ thuật. Có thể ảnh hưởng đến chất lượng AI output.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Temperature</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="2"
+                          value={form.temperature_override ?? 0.7}
+                          onChange={(e) => setForm({ ...form, temperature_override: parseFloat(e.target.value) || 0.7 })}
+                          className="text-xs h-8"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Max Tokens</Label>
+                        <Input
+                          type="number"
+                          value={form.max_tokens_override ?? 2048}
+                          onChange={(e) => setForm({ ...form, max_tokens_override: parseInt(e.target.value) || 2048 })}
+                          className="text-xs h-8"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Top P</Label>
+                        <Input
+                          type="number"
+                          step="0.05"
+                          min="0"
+                          max="1"
+                          value={form.top_p_override ?? 1}
+                          onChange={(e) => setForm({ ...form, top_p_override: parseFloat(e.target.value) || 1 })}
+                          className="text-xs h-8"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Priority</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={form.priority}
+                          onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value) || 10 })}
+                          className="text-xs h-8"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
