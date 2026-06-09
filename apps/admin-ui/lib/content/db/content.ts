@@ -19,6 +19,7 @@ export async function getContentItems(options?: {
   page?: number;
   limit?: number;
   created_by?: string;
+  task_id?: string; // V3: filter by linked task
 }): Promise<PaginatedResult<ContentItem>> {
   const page = options?.page || 1;
   const limit = options?.limit || 20;
@@ -50,6 +51,10 @@ export async function getContentItems(options?: {
   if (options?.created_by) {
     conditions.push(`created_by = $${idx++}`);
     params.push(options.created_by);
+  }
+  if (options?.task_id) {
+    conditions.push(`task_id = $${idx++}`);
+    params.push(options.task_id);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -98,13 +103,13 @@ export async function getContentItemById(
 }
 
 export async function createContentItem(
-  data: ContentItemInput
+  data: ContentItemInput & { task_id?: string | null }
 ): Promise<ContentItem> {
   const { rows } = await query<ContentItem>(
     `INSERT INTO content_items
        (content_type, title, content_body, product_id, product_name,
-        status, metadata, generated_by, template_id, created_by, published_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        status, metadata, generated_by, template_id, created_by, published_at, task_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING *`,
     [
       data.content_type,
@@ -118,6 +123,7 @@ export async function createContentItem(
       data.template_id || null,
       data.created_by || null,
       data.published_at || null,
+      data.task_id || null,
     ]
   );
   return {

@@ -11,6 +11,8 @@ import {
   updateSchedule,
   deleteSchedule,
 } from "@/lib/content/db/schedules";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
 
 export async function GET(
   _req: NextRequest,
@@ -33,6 +35,12 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -51,6 +59,12 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(_req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(_req);
+  if (csrfError) return csrfError;
+
   try {
     const { id } = await params;
     const deleted = await deleteSchedule(parseInt(id, 10));

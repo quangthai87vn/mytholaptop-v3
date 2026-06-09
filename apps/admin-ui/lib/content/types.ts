@@ -14,6 +14,9 @@ export type ProviderGroupSlug = "cloud_api" | "ai_aggregator" | "local_llm" | "i
 export type ProviderStatus = "active" | "inactive";
 export type ConnectionStatus = "connected" | "error" | "unknown" | "testing";
 
+/** Provider classification — system providers cannot be deleted */
+export type ProviderKind = "system" | "custom";
+
 export interface ProviderGroup {
   id: number;
   name: string;
@@ -100,6 +103,7 @@ export interface AIProviderInput {
   retry_count?: number;
   status?: ProviderStatus;
   is_default?: boolean;
+  is_active?: boolean;
   custom_headers?: Record<string, string>;
   // Runtime config
   temperature?: number;
@@ -216,6 +220,8 @@ export interface ContentItem {
   template_id: number | null;
   created_by: string | null;
   published_at: string | null;
+  // V3: linked task
+  task_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -232,6 +238,8 @@ export interface ContentItemInput {
   template_id?: number;
   created_by?: string;
   published_at?: string;
+  // V3: link to task
+  task_id?: string;
 }
 
 export interface ContentGenerationLog {

@@ -6,9 +6,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSchedules, createSchedule } from "@/lib/content/db/schedules";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
 import type { ScheduleStatus } from "@/lib/content/types";
 
 export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { searchParams } = req.nextUrl;
     const channel = searchParams.get("channel") || undefined;
@@ -35,6 +40,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
   try {
     const body = await req.json();
     const { content_item_id, channel, publish_at, timezone, metadata, created_by } = body;

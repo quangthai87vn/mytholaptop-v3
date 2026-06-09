@@ -6,8 +6,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentItems, getRecentContentItems } from "@/lib/content/db/content";
 import { getTotalTokenUsage } from "@/lib/content/db/logs";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const [allResult, recentItems, tokenUsage] = await Promise.all([
       getContentItems({ limit: 1 }),

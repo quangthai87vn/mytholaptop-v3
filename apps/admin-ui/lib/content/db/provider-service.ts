@@ -9,6 +9,7 @@
 
 import { query } from "@/lib/db";
 import { encrypt, decrypt } from "./encryption";
+import { getCacheOrFetch, invalidateAICache } from "./cache";
 import type {
   AIProvider,
   AIProviderInput,
@@ -19,6 +20,8 @@ import type {
   ProviderGroupSlug,
   ConnectionStatus,
 } from "../types";
+import type { ProviderCard } from "@/types/ai-operating";
+import type { AIProviderType } from "../types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -467,10 +470,16 @@ export async function updateProvider(
       fields.push(`status = $${idx++}`);
       values.push(input.status);
     } else {
-      // Old schema: map status to is_active
       fields.push(`is_active = $${idx++}`);
       values.push(input.status === "active");
     }
+  }
+  // New schema: is_active mirrors status; save both columns consistently
+  if (input.is_active !== undefined && schema === "new") {
+    fields.push(`is_active = $${idx++}`);
+    values.push(Boolean(input.is_active));
+    fields.push(`status = $${idx++}`);
+    values.push(input.is_active ? "active" : "inactive");
   }
   if (input.is_default !== undefined && schema === "new") {
     if (input.is_default) {
@@ -557,7 +566,7 @@ export async function deleteProvider(id: number): Promise<{ success: boolean; me
 
 export async function activateProvider(id: number): Promise<AIProvider | null> {
   await query(
-    `UPDATE ai_providers SET status = 'active', updated_at = NOW()
+    `UPDATE ai_providers SET status = 'active', is_active = true, updated_at = NOW()
        WHERE is_deleted = false AND id = $1`,
     [id]
   );
@@ -579,7 +588,7 @@ export async function deactivateProvider(id: number): Promise<AIProvider | null>
   }
 
   await query(
-    `UPDATE ai_providers SET status = 'inactive', updated_at = NOW()
+    `UPDATE ai_providers SET status = 'inactive', is_active = false, updated_at = NOW()
        WHERE is_deleted = false AND id = $1`,
     [id]
   );
@@ -797,22 +806,36 @@ export async function isProviderInUse(providerId: number): Promise<boolean> {
 
 export interface ProviderDeleteCheck {
   canDelete: boolean;
+  isSystem: boolean;
   isDefault: boolean;
   isInUse: boolean;
   reason?: string;
+  systemCannotDelete?: boolean;
 }
 
 export async function checkProviderDelete(id: number): Promise<ProviderDeleteCheck> {
   const provider = await getProviderById(id);
   if (!provider) {
-    return { canDelete: false, isDefault: false, isInUse: false, reason: "Provider không tìm thấy" };
+    return { canDelete: false, isSystem: false, isDefault: false, isInUse: false, reason: "Provider không tìm thấy" };
+  }
+
+  // System providers cannot be deleted — only disabled
+  if (provider.is_system) {
+    return {
+      canDelete: false,
+      isSystem: true,
+      isDefault: provider.is_default,
+      isInUse: false,
+      systemCannotDelete: true,
+      reason: `System provider "${provider.name}" không thể xóa. Chỉ có thể tắt/bật.`,
+    };
   }
 
   const [inUse] = await Promise.all([isProviderInUse(id)]);
 
-  // Always allow deletion — return flags for frontend dialog to handle warnings
   return {
     canDelete: true,
+    isSystem: false,
     isDefault: provider.is_default,
     isInUse: inUse,
     reason: inUse
@@ -821,4 +844,86 @@ export async function checkProviderDelete(id: number): Promise<ProviderDeleteChe
       ? "Provider này đang là mặc định."
       : undefined,
   };
+}
+
+// ── Legacy Bridge (providers.ts → provider-service.ts) ───────────────────────────
+
+/** getDecryptedApiKey by provider type — mirrors legacy providers.ts signature */
+export async function getDecryptedApiKeyByType(providerType: string): Promise<string | null> {
+  try {
+    const { rows } = await query<{ api_key_encrypted: string | null; api_key_iv: string | null }>(
+      "SELECT api_key_encrypted, api_key_iv FROM ai_providers WHERE provider = $1 LIMIT 1",
+      [providerType]
+    );
+    if (!rows[0]?.api_key_encrypted || !rows[0]?.api_key_iv) return null;
+    return decrypt(rows[0].api_key_encrypted, rows[0].api_key_iv);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bridge: getDecryptedApiKey accepting id OR provider type.
+ * Used by legacy callers that pass (id) OR (undefined, type).
+ * Prefer getDecryptedApiKey(id) or getDecryptedApiKeyByType(type) in new code.
+ */
+export async function getDecryptedApiKeyLegacy(
+  providerId?: number,
+  providerType?: string
+): Promise<string | null> {
+  if (!providerId && !providerType) return null;
+  if (providerId) return getDecryptedApiKey(providerId);
+  return getDecryptedApiKeyByType(providerType!);
+}
+
+/**
+ * Bridge: getAllProviderCards for legacy callers.
+ * Maps AIProvider[] (from provider-service.ts) to ProviderCard[] shape
+ * that legacy code expects (field `type` instead of `provider`, `is_active` flag, etc).
+ */
+export async function getAllProviderCardsLegacy(): Promise<ProviderCard[]> {
+  return getCacheOrFetch("ai:provider-cards", async () => {
+    const providers = await getAllProviders({});
+    return providers.map((r) => {
+      // Cast to access runtime config fields that exist on the query result
+      // but are not on the AIProvider interface (max_output_tokens, top_p, etc.)
+      const ext = r as unknown as Record<string, unknown>;
+      return {
+        id: r.id,
+        type: (r.provider ?? r.slug ?? "openai") as ProviderCard["type"],
+        display_name: r.display_name || r.name || r.provider || "Unknown",
+        name: r.display_name || r.name || r.provider || "Unknown",
+        slug: r.slug || r.provider || "",
+        base_url: r.base_url || null,
+        is_active: r.is_active ?? false,
+        sort_order: r.sort_order ?? 0,
+        model_name: r.model_name || undefined,
+        temperature: r.temperature ?? undefined,
+        group_slug: r.group_slug,
+        status: r.status,
+        is_system: r.is_system,
+        is_default: r.is_default,
+        connection_status: r.connection_status,
+        custom_headers: r.custom_headers,
+        streaming_enabled: r.streaming_enabled,
+        timeout_ms: r.timeout_ms,
+        retry_count: r.retry_count,
+        max_output_tokens: (ext.max_output_tokens as number) ?? undefined,
+        top_p: (ext.top_p as number) ?? undefined,
+        frequency_penalty: (ext.frequency_penalty as number) ?? undefined,
+        presence_penalty: (ext.presence_penalty as number) ?? undefined,
+        last_checked_at: r.last_checked_at,
+        last_error: r.last_error,
+      } satisfies ProviderCard;
+    });
+  });
+}
+
+// Re-export getProviderByType so callers from providers.ts can use it from here
+export async function getProviderByType(provider: AIProviderType): Promise<AIProvider | null> {
+  const { rows } = await query<AIProvider>(
+    "SELECT * FROM ai_providers WHERE provider = $1",
+    [provider]
+  );
+  return rows[0] || null;
 }

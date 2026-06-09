@@ -11,11 +11,16 @@ import {
   updateContentItem,
   deleteContentItem,
 } from "@/lib/content/db/content";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { id } = await params;
     const item = await getContentItemById(parseInt(id, 10));
@@ -33,6 +38,12 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -51,6 +62,12 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authError = await requireAdminAuth(_req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(_req);
+  if (csrfError) return csrfError;
+
   try {
     const { id } = await params;
     const deleted = await deleteContentItem(parseInt(id, 10));

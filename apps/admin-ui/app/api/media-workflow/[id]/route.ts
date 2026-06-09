@@ -1,41 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMediaWorkflowById, updateMediaWorkflow } from "@/lib/workspace/db";
+
+/**
+ * @deprecated MediaWorkflow API - use /api/tasks instead
+ * @deprecated since 2026-05-26
+ * @deprecated Migration: sql/workspace/008_media_workflow_merge.sql
+ * Data migrated: 10 media workflows → pm_tasks (2026-05-26)
+ */
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
-  try {
-    const { id } = await params;
-    const workflow = await getMediaWorkflowById(id);
-    if (!workflow) {
-      return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
-    }
-    return NextResponse.json({ data: workflow });
-  } catch (error) {
-    console.error("[API] GET /api/media-workflow/[id] error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
+  const { id } = await params;
+  return NextResponse.json(
+    {
+      error: "MediaWorkflow API has been deprecated",
+      message: `GET /api/tasks/${id} instead. Note: media workflow ID ${id} has been migrated to pm_tasks with task_type field.`,
+      migrated_at: "2026-05-26",
+      migration: "sql/workspace/008_media_workflow_merge.sql",
+    },
+    { status: 410 }
+  );
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-
-    // Handle status change to published
-    if (body.status === "published" && !body.published_at) {
-      body.published_at = new Date().toISOString();
-    }
-
-    const workflow = await updateMediaWorkflow(id, body);
-    if (!workflow) {
-      return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
-    }
-    return NextResponse.json({ data: workflow });
-  } catch (error) {
-    console.error("[API] PUT /api/media-workflow/[id] error:", error);
-    return NextResponse.json({ error: "Failed to update workflow" }, { status: 400 });
-  }
+  const { id } = await params;
+  return NextResponse.json(
+    {
+      error: "MediaWorkflow API has been deprecated",
+      message: `Use PUT /api/tasks/${id} with workflow_stage field instead.`,
+      migrated_at: "2026-05-26",
+      migration: "sql/workspace/008_media_workflow_merge.sql",
+    },
+    { status: 410 }
+  );
 }

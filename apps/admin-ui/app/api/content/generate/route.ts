@@ -19,6 +19,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateContentWithRouting, type AIGenContext } from "@/lib/ai/generation-service";
 import { resolveRouting, type AIGeneratorTask } from "@/lib/ai/routing-engine";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
+import { requirePermission } from "@/lib/auth/require-permission";
 import type { ResolvedRouting } from "@/lib/ai/routing-engine";
 import type { ContentPlatform } from "@/types/content";
 import type {
@@ -28,7 +31,7 @@ import type {
 } from "@/store/ai-studio-store";
 import type { AIProduct } from "@/types/content";
 import { getAllRoutingRules } from "@/lib/content/db/task-routes";
-import { getAllProviderCards } from "@/lib/content/db/providers";
+import { getAllProviderCardsLegacy } from "@/lib/content/db/provider-service";
 import { getAllBrandVoices, getActiveBrandVoice } from "@/lib/content/db/brand-voices";
 import { getSafetyRules } from "@/lib/content/db/safety-rules";
 import { getAllSystemPrompts } from "@/lib/content/db/system-prompts";
@@ -80,7 +83,7 @@ async function loadAIGenContext(): Promise<AIGenContext> {
   const [taskRoutes, providers, brandVoices, safetyRules, systemPrompts, activeBrandVoice] =
     await Promise.all([
       getAllRoutingRules().catch(() => [] as RoutingRule[]),
-      getAllProviderCards().catch(() => [] as ProviderCard[]),
+      getAllProviderCardsLegacy().catch(() => [] as ProviderCard[]),
       getAllBrandVoices().catch(() => [] as BrandVoice[]),
       getSafetyRules().catch(() => [] as SafetyRule[]),
       getAllSystemPrompts().catch(() => [] as SystemPromptTemplate[]),
@@ -123,6 +126,15 @@ function mapLegacyGoal(tone?: string): MarketingGoal {
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
+
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
+  const permError = requirePermission(req, "ai_generate");
+  if (permError) return permError;
 
   try {
     const body = await req.json() as LegacyBody | V2Body;

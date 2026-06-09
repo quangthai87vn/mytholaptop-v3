@@ -9,15 +9,21 @@ import {
   getContentItems,
   createContentItem,
 } from "@/lib/content/db/content";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
 import type { ContentType, ContentStatus } from "@/lib/content/types";
 
 export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { searchParams } = req.nextUrl;
     const contentType = searchParams.get("content_type") as ContentType | null;
     const status = searchParams.get("status") as ContentStatus | null;
     const search = searchParams.get("search") || undefined;
     const productId = searchParams.get("product_id") || undefined;
+    const taskId = searchParams.get("task_id") || undefined;
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
@@ -26,6 +32,7 @@ export async function GET(req: NextRequest) {
       status: status || undefined,
       search,
       product_id: productId,
+      task_id: taskId,
       page,
       limit,
     });
@@ -38,6 +45,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
   try {
     const body = await req.json();
     const item = await createContentItem({
@@ -52,6 +65,8 @@ export async function POST(req: NextRequest) {
       template_id: body.template_id,
       created_by: body.created_by,
       published_at: body.published_at,
+      // V3: link to task
+      task_id: body.task_id || null,
     });
     return NextResponse.json({ data: item }, { status: 201 });
   } catch (err) {

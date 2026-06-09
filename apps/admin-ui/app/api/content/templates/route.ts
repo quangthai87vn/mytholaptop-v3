@@ -6,9 +6,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getTemplates, createTemplate } from "@/lib/content/db/templates";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
 import type { ContentType } from "@/lib/content/types";
 
 export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { searchParams } = req.nextUrl;
     const contentType = searchParams.get("content_type") as ContentType | null;
@@ -29,6 +34,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
   try {
     const body = await req.json();
     const { template_name, content_type, system_prompt, user_template, variables, tone_options, is_active } = body;
