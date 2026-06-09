@@ -11,6 +11,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Calendar,
   Youtube,
+  Circle,
+  FileText,
 } from "lucide-react";
 import {
   Tooltip,

@@ -79,6 +79,76 @@ const DEFAULT_STATS: MigrationStats = {
   migratedVariants: 0,
 };
 
+function getInitialMigrationStats(): MigrationStats {
+  const history = loadMigrationHistory();
+  return history?.stats ? { ...DEFAULT_STATS, ...history.stats } : DEFAULT_STATS;
+}
+
+function getInitialMigrationOptions() {
+  try {
+    const savedOpts = localStorage.getItem("mtl_migration_options");
+    if (!savedOpts) {
+      return {
+        selectedTypes: ["categories", "products"] as MigrationDataType[],
+        conflictStrategy: "update" as ConflictStrategy,
+        batchSize: 100,
+        skipOnError: true,
+        preserveImages: false,
+        mediaOptions: DEFAULT_MEDIA_OPTIONS,
+      };
+    }
+
+    const opts = JSON.parse(savedOpts);
+    return {
+      selectedTypes:
+        opts.selectedTypes && Array.isArray(opts.selectedTypes)
+          ? (opts.selectedTypes as MigrationDataType[])
+          : (["categories", "products"] as MigrationDataType[]),
+      conflictStrategy: (opts.conflictStrategy as ConflictStrategy) || "update",
+      batchSize: typeof opts.batchSize === "number" ? opts.batchSize : 100,
+      skipOnError:
+        typeof opts.skipOnError === "boolean" ? opts.skipOnError : true,
+      preserveImages:
+        typeof opts.preserveImages === "boolean" ? opts.preserveImages : false,
+      mediaOptions: opts.mediaOptions || DEFAULT_MEDIA_OPTIONS,
+    };
+  } catch {
+    return {
+      selectedTypes: ["categories", "products"] as MigrationDataType[],
+      conflictStrategy: "update" as ConflictStrategy,
+      batchSize: 100,
+      skipOnError: true,
+      preserveImages: false,
+      mediaOptions: DEFAULT_MEDIA_OPTIONS,
+    };
+  }
+}
+
+function getInitialImageConfig(): ImageUploadConfig {
+  try {
+    const savedImageConfig = localStorage.getItem("mtl_image_upload_config");
+    if (!savedImageConfig) return DEFAULT_IMAGE_UPLOAD_CONFIG;
+
+    return {
+      ...DEFAULT_IMAGE_UPLOAD_CONFIG,
+      ...JSON.parse(savedImageConfig),
+    };
+  } catch {
+    return DEFAULT_IMAGE_UPLOAD_CONFIG;
+  }
+}
+
+function getInitialMappingData(): IdMapping {
+  return loadIdMapping() ?? {
+    categories: {},
+    products: {},
+    images: {},
+    tags: {},
+  };
+}
+
+const initialMigrationOptions = getInitialMigrationOptions();
+
 export default function SyncPage() {
   // Track if settings are configured
   const [isConfigured, setIsConfigured] = useState(false);
@@ -95,6 +165,34 @@ export default function SyncPage() {
   const [connectionState, setConnectionState] = useState<ConnectionState>({
     status: "idle",
   });
+
+  // Preview data
+  const [categories, setCategories] = useState<WooCategory[]>([]);
+  const [products, setProducts] = useState<WooProduct[]>([]);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+
+  // Migration options
+  const [selectedTypes, setSelectedTypes] = useState<MigrationDataType[]>(initialMigrationOptions.selectedTypes);
+  const [conflictStrategy, setConflictStrategy] =
+    useState<ConflictStrategy>(initialMigrationOptions.conflictStrategy);
+  const [migrationMode, setMigrationMode] = useState<MigrationMode>("continue");
+  const [batchSize, setBatchSize] = useState(initialMigrationOptions.batchSize);
+  const [skipOnError, setSkipOnError] = useState(initialMigrationOptions.skipOnError);
+  const [preserveImages, setPreserveImages] = useState(initialMigrationOptions.preserveImages);
+  const [mediaOptions, setMediaOptions] =
+    useState<MediaMigrationOptions>(initialMigrationOptions.mediaOptions);
+  const [imageConfig, setImageConfig] =
+    useState<ImageUploadConfig>(getInitialImageConfig);
+
+  // Migration state
+  const [isRunning, setIsRunning] = useState(false);
+  const [isCancelled, setIsCancelled] = useState(false);
+  const [progress, setProgress] =
+    useState<MigrationProgress>(DEFAULT_PROGRESS);
+  const [stats, setStats] = useState<MigrationStats>(getInitialMigrationStats);
+  const [logs, setLogs] = useState<MigrationLog[]>([]);
+  const [mappingData, setMappingData] = useState<IdMapping>(getInitialMappingData);
 
   // Load settings from server
   useEffect(() => {
@@ -118,68 +216,7 @@ export default function SyncPage() {
     });
 
     // Restore previous migration stats and mapping on mount
-    const history = loadMigrationHistory();
-    if (history) {
-      if (history.stats) {
-        setStats({ ...DEFAULT_STATS, ...history.stats });
-      }
-    }
-
-    const savedMapping = loadIdMapping();
-    if (savedMapping) {
-      setMappingData(savedMapping);
-    }
-
-    // Load saved migration options from localStorage
-    try {
-      const savedOpts = localStorage.getItem("mtl_migration_options");
-      if (savedOpts) {
-        const opts = JSON.parse(savedOpts);
-        if (opts.selectedTypes && Array.isArray(opts.selectedTypes))
-          setSelectedTypes(opts.selectedTypes);
-        if (opts.conflictStrategy) setConflictStrategy(opts.conflictStrategy);
-        if (typeof opts.batchSize === "number") setBatchSize(opts.batchSize);
-        if (typeof opts.skipOnError === "boolean")
-          setSkipOnError(opts.skipOnError);
-        if (typeof opts.preserveImages === "boolean")
-          setPreserveImages(opts.preserveImages);
-        if (opts.mediaOptions) setMediaOptions(opts.mediaOptions);
-      }
-
-      const savedImageConfig =
-        localStorage.getItem("mtl_image_upload_config");
-      if (savedImageConfig) {
-        setImageConfig({
-          ...DEFAULT_IMAGE_UPLOAD_CONFIG,
-          ...JSON.parse(savedImageConfig),
-        });
-      }
-    } catch {
-      // ignore localStorage errors
-    }
   }, []);
-
-  // Preview data
-  const [categories, setCategories] = useState<WooCategory[]>([]);
-  const [products, setProducts] = useState<WooProduct[]>([]);
-  const [totalProducts, setTotalProducts] = useState(0);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-
-  // Migration options
-  const [selectedTypes, setSelectedTypes] = useState<MigrationDataType[]>([
-    "categories",
-    "products",
-  ]);
-  const [conflictStrategy, setConflictStrategy] =
-    useState<ConflictStrategy>("update");
-  const [migrationMode, setMigrationMode] = useState<MigrationMode>("continue");
-  const [batchSize, setBatchSize] = useState(100);
-  const [skipOnError, setSkipOnError] = useState(true);
-  const [preserveImages, setPreserveImages] = useState(false);
-  const [mediaOptions, setMediaOptions] =
-    useState<MediaMigrationOptions>(DEFAULT_MEDIA_OPTIONS);
-  const [imageConfig, setImageConfig] =
-    useState<ImageUploadConfig>(DEFAULT_IMAGE_UPLOAD_CONFIG);
 
   // Save migration options to localStorage
   useEffect(() => {
@@ -217,31 +254,18 @@ export default function SyncPage() {
         downloadDescriptionImages: false,
         downloadShortDescImages: false,
       }));
-    } else {
-      setMediaOptions((prev) => ({
-        ...prev,
-        downloadThumbnails: true,
-        downloadGallery: true,
-        downloadCategoryImages: true,
-        downloadDescriptionImages: true,
-        downloadShortDescImages: true,
-      }));
+      return;
     }
-  }, []);
 
-  // Migration state
-  const [isRunning, setIsRunning] = useState(false);
-  const [isCancelled, setIsCancelled] = useState(false);
-  const [progress, setProgress] =
-    useState<MigrationProgress>(DEFAULT_PROGRESS);
-  const [stats, setStats] = useState<MigrationStats>(DEFAULT_STATS);
-  const [logs, setLogs] = useState<MigrationLog[]>([]);
-  const [mappingData, setMappingData] = useState<IdMapping>({
-    categories: {},
-    products: {},
-    images: {},
-    tags: {},
-  });
+    setMediaOptions((prev) => ({
+      ...prev,
+      downloadThumbnails: true,
+      downloadGallery: true,
+      downloadCategoryImages: true,
+      downloadDescriptionImages: true,
+      downloadShortDescImages: true,
+    }));
+  }, [setMediaOptions, setPreserveImages]);
 
   const isCancelledRef = useRef(false);
 
@@ -419,7 +443,6 @@ export default function SyncPage() {
     medusaUrl,
     selectedTypes,
     conflictStrategy,
-    migrationMode,
     batchSize,
     skipOnError,
     preserveImages,

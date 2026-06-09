@@ -313,17 +313,6 @@ export async function exportCampaignTaskReport({
   applyHeaderMeta(summarySheet.getCell("E3"));
 
   const companyLogo = null;
-  if (companyLogo) {
-    const logoImageId = workbook.addImage({
-      buffer: new Uint8Array(companyLogo.buffer),
-      extension: companyLogo.extension,
-    });
-    summarySheet.addImage(logoImageId, {
-      tl: { col: 0.25, row: 0.2 },
-      ext: { width: 135, height: 70 },
-      editAs: "oneCell",
-    });
-  }
 
   summarySheet.getRow(5).height = 34;
   summarySheet.getRow(6).height = 34;
@@ -432,7 +421,7 @@ export async function exportCampaignTaskReport({
     const thumbnail = thumbnailBuffers[index];
     if (thumbnail) {
       const imageId = workbook.addImage({
-        buffer: new Uint8Array(thumbnail.buffer),
+        buffer: thumbnail.buffer,
         extension: thumbnail.extension,
       });
       summarySheet.addImage(imageId, {
@@ -558,9 +547,15 @@ export async function exportCampaignTaskReport({
     }),
   ]);
   onStageChange?.("Đang gửi file tải xuống");
-  const blob = new Blob([
-    buffer instanceof ArrayBuffer ? buffer : new Uint8Array(buffer as ArrayBufferLike),
-  ], {
+  const excelBytes =
+    buffer instanceof ArrayBuffer
+      ? new Uint8Array(buffer)
+      : new Uint8Array(
+          (buffer as Uint8Array).buffer,
+          (buffer as Uint8Array).byteOffset,
+          (buffer as Uint8Array).byteLength
+        );
+  const blob = new Blob([new Uint8Array(excelBytes)], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   const fileName = `bao-cao-cong-viec-${slugify(campaign.name)}-${today.toISOString().slice(0, 10)}.xlsx`;
