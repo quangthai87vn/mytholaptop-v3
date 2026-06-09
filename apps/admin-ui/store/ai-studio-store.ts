@@ -446,6 +446,7 @@ const defaultState: StudioState = {
 export const useStudioStore = create<StudioState & StudioActions>()(
   devtools(
     (set, get) => ({
+      ...defaultState,
       // Wizard navigation
       setWizardStep: (step) => set({ wizardStep: step ?? "product" }),
       goToNextStep: () => {
