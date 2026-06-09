@@ -15,6 +15,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { MigrationConfig } from "@/types";
 import { updateProduct } from "@/services/medusa.service";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
 
 // ============================================================
 // TYPES
@@ -170,7 +172,9 @@ async function downloadImage(
 // API ENDPOINTS
 // ============================================================
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
   if (!_repairState) {
     return NextResponse.json({ running: false, progress: null });
   }
@@ -182,7 +186,13 @@ export async function GET() {
   });
 }
 
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
   if (_repairState && _repairState.running) {
     _repairState.aborted = true;
     return NextResponse.json({ aborted: true, message: "Repair job aborted" });
@@ -191,6 +201,12 @@ export async function DELETE() {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
   try {
     const body = await req.json();
     const config: MigrationConfig = body.config;
@@ -246,7 +262,8 @@ async function runRepair(config: MigrationConfig, batchSize: number) {
   try {
     console.log("[Repair] Starting repair...");
 
-    // Fetch WooCommerce products
+    // Fetch WooCommerce products (credentials must be query params for WooCommerce REST API v3)
+    // P5.4: This route is protected by requireAdminAuth — only logged-in admins can call it
     const wooResponse = await fetch(
       `${config.wordpressUrl}/wp-json/wc/v3/products?per_page=100&consumer_key=${config.wooConsumerKey}&consumer_secret=${config.wooConsumerSecret}`
     );

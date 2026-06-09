@@ -11,8 +11,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
 
 const ALLOWED_TIMEOUT_MS = 30000;
+
+// P5.10 Security Audit: this route requires admin auth to prevent SSRF abuse.
+/// Unauthorized access would allow attackers to proxy arbitrary requests through the server.
 
 // Different User-Agent strings to try (some sites block the first one)
 const USER_AGENTS = [
@@ -97,6 +101,10 @@ async function tryFetch(url: string, userAgentIndex: number): Promise<FetchAttem
 }
 
 export async function GET(req: NextRequest) {
+  // P5.10: Auth required — prevents unauthorized SSRF abuse
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   let url = req.nextUrl.searchParams.get("url");
 
   if (!url) {

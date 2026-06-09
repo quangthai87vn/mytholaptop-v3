@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exec } from "@/lib/db";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
 
 /**
  * POST /api/migration/init
  * Initialize migration tables in database
+ * P5.4 Security: requires admin authentication
  */
 export async function POST(request: NextRequest) {
+  const authError = await requireAdminAuth(request);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(request);
+  if (csrfError) return csrfError;
+
   try {
     // Create migration_runs table
     await exec(`
@@ -115,7 +124,7 @@ export async function POST(request: NextRequest) {
       CREATE INDEX IF NOT EXISTS idx_migration_logs_created_at ON migration_logs(created_at DESC);
     `);
 
-    // Create app_settings table (WooCommerce, Medusa, Company credentials)
+     // Create app_settings table (WooCommerce, Medusa, Company credentials)
     await exec(`
       CREATE TABLE IF NOT EXISTS app_settings (
         id          SERIAL PRIMARY KEY,
