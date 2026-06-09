@@ -18,29 +18,18 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import * as fsSync from "fs";
 import * as path from "path";
 import { requireAdminAuth } from "@/lib/auth/require-admin";
 import { requireCsrf } from "@/lib/auth/csrf";
-
-const ADMIN_UI_ROOT = process.cwd().replace(/\\/g, "/");
-
-const ALLOWED_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/svg+xml",
-  "image/bmp",
-]);
-
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-
-function ensureDir(dir: string): void {
-  if (!fsSync.existsSync(dir)) {
-    fsSync.mkdirSync(dir, { recursive: true });
-  }
-}
+import {
+  ALLOWED_UPLOAD_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+  ensureUploadDir,
+  resolveUploadRootDir,
+  joinUploadPath,
+  uploadFileExists,
+  writeUploadFile,
+} from "@/lib/medusa/upload-file-system";
 
 /**
  * Sanitize a string to be safe for use in filenames.
@@ -141,19 +130,6 @@ function buildSubDir(folderPattern: string, sourceUrl?: string): string {
 }
 
 /**
- * Resolve physical root directory from uploadRootDir config.
- * Handles both relative (to admin-ui root) and absolute paths.
- */
-function resolveRootDir(uploadRootDir: string): string {
-  if (path.isAbsolute(uploadRootDir)) {
-    return uploadRootDir;
-  }
-
-  const normalizedRoot = uploadRootDir.replace(/^\.\//, "").replace(/^\//, "");
-  return `${ADMIN_UI_ROOT}/${normalizedRoot}`.replace(/\/+/g, "/");
-}
-
-/**
  * Extract extension from MIME type
  */
 function mimeTypeToExt(mimeType: string): string {
@@ -234,13 +210,13 @@ export async function POST(req: NextRequest) {
     });
 
     // Validate MIME type
-    if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+    if (!ALLOWED_UPLOAD_MIME_TYPES.has(mimeType)) {
       console.error("[MediaUpload] Invalid MIME type:", mimeType);
       return NextResponse.json({ error: `Unsupported MIME type: ${mimeType}` }, { status: 415 });
     }
 
     // Validate file size
-    if (fileSize > MAX_FILE_SIZE) {
+    if (fileSize > MAX_UPLOAD_FILE_SIZE) {
       return NextResponse.json(
         { error: `File too large: ${(fileSize / 1024 / 1024).toFixed(2)}MB > 50MB` },
         { status: 413 }
@@ -290,17 +266,17 @@ export async function POST(req: NextRequest) {
     const subDir = buildSubDir(imageFolderPattern, sourceUrl);
 
     // Resolve physical path
-    const physicalRoot = resolveRootDir(uploadRootDir);
-    const absoluteSubDir = path.join(physicalRoot, subDir);
-    ensureDir(absoluteSubDir);
+    const physicalRoot = resolveUploadRootDir(uploadRootDir);
+    const absoluteSubDir = joinUploadPath(physicalRoot, subDir);
+    ensureUploadDir(absoluteSubDir);
 
-    const absoluteFilePath = path.join(absoluteSubDir, finalFileName);
+    const absoluteFilePath = joinUploadPath(absoluteSubDir, finalFileName);
 
     // Handle file existence
     const buffer = Buffer.from(fileBuffer);
     let action: "saved" | "overwritten" | "exists" = "saved";
 
-    if (fsSync.existsSync(absoluteFilePath)) {
+    if (uploadFileExists(absoluteFilePath)) {
       if (imageConflictStrategy === "overwrite") {
         action = "overwritten";
       } else {
@@ -309,7 +285,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Always write the file (overwrite if exists)
-    fsSync.writeFileSync(absoluteFilePath, buffer);
+    writeUploadFile(absoluteFilePath, buffer);
 
     const elapsed = Date.now() - startTime;
     console.log(`[MediaUpload] ${action.toUpperCase()}: ${absoluteFilePath} (${(fileSize / 1024).toFixed(1)}KB, ${elapsed}ms)`);
