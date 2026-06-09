@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { Project, ProjectStatus, ProjectPriority } from "@/lib/workspace/types";
+import { useState, useEffect } from "react";
+import type { Project } from "@/lib/workspace/types";
 import {
   Dialog,
   DialogContent,
@@ -13,14 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { PRIORITY_CONFIG } from "@/lib/workspace/types";
+import { DatePicker } from "@/components/ui/date-picker";
+import { toast } from "sonner";
+import { toISOStringOrNull } from "@/lib/workspace/date-utils";
 
 const COLOR_PRESETS = [
   "#E60012", "#DC2626", "#2563EB", "#7C3AED",
@@ -41,25 +36,60 @@ export function ProjectForm({
   project,
 }: ProjectFormProps) {
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState<Partial<Project>>({
+
+  type FormState = {
+    name: string;
+    description: string;
+    color: string;
+    start_date: string;
+    end_date: string;
+    budget: string;
+    tags: string[];
+  };
+
+  const [form, setForm] = useState<FormState>({
     name: project?.name ?? "",
     description: project?.description ?? "",
-    status: project?.status ?? "active",
-    priority: project?.priority ?? "medium",
     color: project?.color ?? "#E60012",
     start_date: project?.start_date ?? "",
     end_date: project?.end_date ?? "",
-    budget: project?.budget,
+    budget: project?.budget != null ? String(project.budget) : "",
     tags: project?.tags ?? [],
   });
 
+  useEffect(() => {
+    if (open) {
+      setForm({
+        name: project?.name ?? "",
+        description: project?.description ?? "",
+        color: project?.color ?? "#E60012",
+        start_date: project?.start_date ?? "",
+        end_date: project?.end_date ?? "",
+        budget: project?.budget != null ? String(project.budget) : "",
+        tags: project?.tags ?? [],
+      });
+    }
+  }, [open, project]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name?.trim()) return;
+    if (!form.name.trim()) return;
     setLoading(true);
     try {
-      await onSubmit(form);
+      const startISO = toISOStringOrNull(form.start_date);
+      const endISO = toISOStringOrNull(form.end_date);
+      await onSubmit({
+        name: form.name,
+        description: form.description || undefined,
+        color: form.color,
+        start_date: startISO ?? undefined,
+        end_date: endISO ?? undefined,
+        budget: form.budget ? Number(form.budget) : undefined,
+        tags: form.tags,
+      });
       onOpenChange(false);
+    } catch {
+      // error shown by caller
     } finally {
       setLoading(false);
     }
@@ -67,11 +97,10 @@ export function ProjectForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" aria-describedby="project-form-desc">
+        <span id="project-form-desc" className="sr-only">Form tạo hoặc chỉnh sửa dự án</span>
         <DialogHeader>
-          <DialogTitle>
-            {project ? "Sửa dự án" : "Tạo dự án mới"}
-          </DialogTitle>
+          <DialogTitle>{project ? "Sửa dự án" : "Tạo dự án mới"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -83,7 +112,7 @@ export function ProjectForm({
             <Input
               id="name"
               placeholder="VD: Summer Sale 2026"
-              value={form.name ?? ""}
+              value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               required
             />
@@ -96,80 +125,27 @@ export function ProjectForm({
               id="description"
               placeholder="Mô tả ngắn về dự án..."
               rows={3}
-              value={form.description ?? ""}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, description: e.target.value }))
-              }
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             />
-          </div>
-
-          {/* Status & Priority row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Trạng thái</Label>
-              <Select
-                value={form.status ?? "active"}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, status: v as ProjectStatus }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Đang hoạt động</SelectItem>
-                  <SelectItem value="planning">Lên kế hoạch</SelectItem>
-                  <SelectItem value="completed">Hoàn thành</SelectItem>
-                  <SelectItem value="on_hold">Tạm dừng</SelectItem>
-                  <SelectItem value="archived">Lưu trữ</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Độ ưu tiên</Label>
-              <Select
-                value={form.priority ?? "medium"}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, priority: v as ProjectPriority }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PRIORITY_CONFIG).map(([key, cfg]) => (
-                    <SelectItem key={key} value={key}>
-                      {cfg.icon} {cfg.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           {/* Dates row */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="start_date">Ngày bắt đầu</Label>
-              <Input
-                id="start_date"
-                type="date"
-                value={form.start_date ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, start_date: e.target.value }))
-                }
+              <Label>Ngày bắt đầu</Label>
+              <DatePicker
+                value={form.start_date}
+                onChange={(v) => setForm((f) => ({ ...f, start_date: v ?? "" }))}
+                placeholder="Chọn ngày"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="end_date">Ngày kết thúc</Label>
-              <Input
-                id="end_date"
-                type="date"
-                value={form.end_date ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, end_date: e.target.value }))
-                }
+              <Label>Ngày kết thúc</Label>
+              <DatePicker
+                value={form.end_date}
+                onChange={(v) => setForm((f) => ({ ...f, end_date: v ?? "" }))}
+                placeholder="Chọn ngày"
               />
             </div>
           </div>
@@ -181,12 +157,9 @@ export function ProjectForm({
               id="budget"
               type="number"
               placeholder="VD: 50000000"
-              value={form.budget ?? ""}
+              value={form.budget}
               onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  budget: e.target.value ? Number(e.target.value) : undefined,
-                }))
+                setForm((f) => ({ ...f, budget: e.target.value }))
               }
             />
           </div>
@@ -199,11 +172,12 @@ export function ProjectForm({
                 <button
                   key={color}
                   type="button"
-                  className={`size-8 rounded-full border-2 transition-all ${
-                    form.color === color
+                  className={
+                    "size-8 rounded-full border-2 transition-all " +
+                    (form.color === color
                       ? "border-slate-900 scale-110 shadow-md"
-                      : "border-transparent hover:scale-105"
-                  }`}
+                      : "border-transparent hover:scale-105")
+                  }
                   style={{ backgroundColor: color }}
                   onClick={() => setForm((f) => ({ ...f, color }))}
                   title={color}
@@ -213,14 +187,10 @@ export function ProjectForm({
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Hủy
             </Button>
-            <Button type="submit" disabled={loading || !form.name?.trim()}>
+            <Button type="submit" disabled={loading || !form.name.trim()}>
               {loading ? "Đang lưu..." : project ? "Lưu thay đổi" : "Tạo dự án"}
             </Button>
           </DialogFooter>

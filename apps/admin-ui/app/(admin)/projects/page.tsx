@@ -1,6 +1,8 @@
-import { getProjects } from "@/lib/workspace/db";
+import { getProjects, getMasterDataItems } from "@/lib/workspace/db";
+import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { ProjectsClient } from "./projects-client";
 import { Target } from "lucide-react";
+import type { MasterDataItem } from "@/lib/workspace/types-master-data";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,17 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
     search: params.search,
   };
 
-  const projects = await getProjects(filters);
+  const [projects, user, projectStatuses, priorities] = await Promise.all([
+    getProjects(filters),
+    getCurrentUser(),
+    getMasterDataItems("project_status"),
+    getMasterDataItems("priority"),
+  ]);
+
+  const masterData = {
+    project_statuses: projectStatuses,
+    priorities,
+  };
 
   return (
     <div className="space-y-6">
@@ -35,7 +47,13 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <ProjectsClient projects={projects} />
+      <ProjectsClient
+        projects={projects}
+        masterData={masterData}
+        isSuperAdmin={user?.role === "super_admin"}
+        isIntern={user?.role === "intern"}
+        userId={user?.id}
+      />
     </div>
   );
 }

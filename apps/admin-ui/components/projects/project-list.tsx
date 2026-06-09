@@ -9,10 +9,23 @@ interface ProjectListProps {
   projects: Project[];
   onEdit?: (project: Project) => void;
   onDelete?: (id: string) => void;
+  onArchive?: (id: string) => void;
   onAdd?: () => void;
+  /** Chỉ super_admin mới được xóa vĩnh viễn */
+  canDelete?: boolean;
+  /** INTERN không thấy nút archive/edit/create */
+  isIntern?: boolean;
 }
 
-export function ProjectList({ projects, onEdit, onDelete, onAdd }: ProjectListProps) {
+export function ProjectList({
+  projects,
+  onEdit,
+  onDelete,
+  onArchive,
+  onAdd,
+  canDelete = false,
+  isIntern = false,
+}: ProjectListProps) {
   if (projects.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -25,7 +38,7 @@ export function ProjectList({ projects, onEdit, onDelete, onAdd }: ProjectListPr
         <p className="text-slate-500 mb-6 max-w-sm">
           Bắt đầu bằng cách tạo dự án đầu tiên để quản lý công việc và chiến dịch của bạn.
         </p>
-        {onAdd && (
+        {onAdd && !isIntern && (
           <Button onClick={onAdd} className="gap-2">
             <Plus className="size-4" />
             Tạo dự án đầu tiên
@@ -42,7 +55,9 @@ export function ProjectList({ projects, onEdit, onDelete, onAdd }: ProjectListPr
           key={project.id}
           project={project}
           onEdit={onEdit}
-          onDelete={onDelete}
+          onDelete={canDelete ? onDelete : undefined}
+          onArchive={onArchive}
+          canDelete={canDelete}
         />
       ))}
     </div>
