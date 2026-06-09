@@ -10,6 +10,7 @@ Hệ thống B2B e-commerce platform cho Mỹ Tho Laptop, bao gồm Medusa backe
 - [Cấu trúc Project](#cấu-trúc-project)
 - [Docker Hub](#docker-hub)
 - [Pull & Chạy trên máy khác](#pull--chạy-trên-máy-khác)
+- [Build từ Source](#build-từ-source)
 - [Build & Push Docker Images](#build--push-docker-images)
 - [Development Local](#development-local)
 - [Cấu hình môi trường](#cấu-hình-môi-trường)
@@ -393,6 +394,75 @@ docker compose pull
 # Restart với image mới
 docker compose up -d
 ```
+
+---
+
+## Build từ Source
+
+Dùng mục này khi bạn muốn build trực tiếp từ source code local thay vì pull image từ Docker Hub.
+
+### Yêu cầu
+
+- Docker Desktop đang chạy
+- Đã clone đầy đủ source code mới nhất
+- Có file `.env` ở root nếu backend/admin cần biến môi trường lúc chạy container
+- Khuyến nghị chạy `pnpm install` trước nếu bạn muốn kiểm tra build local ngoài Docker
+
+### Build toàn bộ bằng Docker Compose
+
+```powershell
+# Build lại tất cả service từ source
+ docker compose -f docker-compose-dev.yml build
+
+# Build sạch không dùng cache
+ docker compose -f docker-compose-dev.yml build --no-cache
+```
+
+### Build riêng từng service bằng Dockerfile
+
+#### Admin UI
+
+```powershell
+# Build image admin-ui từ source hiện tại
+ docker build -t mytholaptopv3-admin-ui:local -f "apps/admin-ui/Dockerfile" "apps/admin-ui"
+```
+
+#### Backend UI
+
+```powershell
+# Build image backend-ui từ source hiện tại
+ docker build -t mytholaptopv3-backend-ui:local -f "apps/backend-ui/apps/backend/Dockerfile" "apps/backend-ui/apps/backend"
+```
+
+### Chạy image sau khi build
+
+```powershell
+# Chạy admin-ui sau khi build
+ docker run --rm -p 3000:3000 mytholaptopv3-admin-ui:local
+
+# Chạy backend sau khi build
+ docker run --rm -p 9000:9000 mytholaptopv3-backend-ui:local
+```
+
+### Build local không dùng Docker
+
+```bash
+# Cài dependencies
+pnpm install
+
+# Build toàn monorepo
+pnpm build
+
+# Hoặc build riêng từng app nếu package scripts đã hỗ trợ
+pnpm --filter admin-ui build
+pnpm --filter backend build
+```
+
+### Kiểm tra sau build
+
+- Admin UI build thành công khi không có lỗi `next build`
+- Backend build thành công khi container hoặc process start không báo lỗi dependency/migration bắt buộc
+- Có thể xem logs bằng `docker logs <container-name>` nếu chạy bằng Docker
 
 ---
 
