@@ -1,52 +1,43 @@
 import {
   LayoutDashboard,
-  RefreshCw,
+  FolderKanban,
+  Target,
+  Clapperboard,
+  CheckSquare,
+  ImageIcon,
+  Calendar,
+  Users,
+  BarChart3,
+  Settings,
+  Brain,
+  Bell,
+  HardDrive,
+  ShoppingBag,
   Package,
+  Users as UsersIcon,
+  RefreshCw,
+  Sparkles,
+  MessageSquare,
+  Shield,
   FolderTree,
-  Tags,
+  Tag,
   Building2,
-  Settings2,
   Layers,
   Warehouse,
   ArrowLeftRight,
   Receipt,
-  Users,
-  Shield,
-  Settings,
-  Laptop,
-  UserRound,
   UserRoundCog,
-  ShoppingCart,
   ShieldCheck,
-  MessageSquare,
-  Zap,
-  BarChart3,
   Activity,
   FileText,
-  Sparkles,
-  Facebook,
-  Globe,
-  Video,
-  ImageIcon,
-  Calendar,
-  Library,
-  FileCode,
-  Brain,
-  ShoppingBag,
+  Laptop,
   CreditCard,
   Truck,
   RotateCcw,
-  Tag,
-  FileText as FileTextIcon,
+  ShoppingCart,
   ClipboardList,
-  type LucideIcon,
-  FolderKanban,
-  Target,
-  CheckSquare,
-  Clapperboard,
-  GraduationCap,
-  Kanban,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
   title: string;
@@ -54,80 +45,74 @@ export interface NavItem {
   icon: LucideIcon;
   children?: NavItem[];
   badge?: string;
+  /** If set, the item is only shown to users with this permission (or super_admin). */
+  requiredPermission?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  // ── WORKSPACE SECTION ──────────────────────────────────────────────────────────
+  // Entry point: Dashboard — accessible to any authenticated user
   {
     title: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
   },
+  // Workspace management — shown if user has any workspace permission
   {
-    title: "Nội dung",
-    href: "/content",
-    icon: FileText,
+    title: "Workspace",
+    href: "/workspace",
+    icon: FolderKanban,
     children: [
       {
-        title: "Tổng quan nội dung",
-        href: "/content",
+        title: "Tổng quan",
+        href: "/workspace",
         icon: LayoutDashboard,
       },
       {
-        title: "Tạo bài viết AI",
-        href: "/content/ai-generator",
-        icon: Sparkles,
+        title: "Dự án",
+        href: "/projects",
+        icon: Target,
+        requiredPermission: "projects.read",
       },
       {
-        title: "Bài viết Facebook",
-        href: "/content/facebook-posts",
-        icon: Facebook,
+        title: "Chiến dịch",
+        href: "/campaigns",
+        icon: Clapperboard,
+        requiredPermission: "campaigns.read",
       },
       {
-        title: "Bài viết Website",
-        href: "/content/website-posts",
-        icon: Globe,
+        title: "Công việc",
+        href: "/tasks",
+        icon: CheckSquare,
+        requiredPermission: "tasks.read",
       },
       {
-        title: "Kịch bản video",
-        href: "/content/video-scripts",
-        icon: Video,
-      },
-      {
-        title: "Prompt hình ảnh",
-        href: "/content/image-prompts",
-        icon: ImageIcon,
-      },
-      {
-        title: "Lịch đăng bài",
-        href: "/content/calendar",
+        title: "Calendar",
+        href: "/calendar",
         icon: Calendar,
+        requiredPermission: "tasks.read",
       },
       {
-        title: "Thư viện nội dung",
-        href: "/content/library",
-        icon: Library,
+        title: "Danh mục",
+        href: "/workspace/master-data",
+        icon: Tag,
+        requiredPermission: "projects.read",
       },
       {
-        title: "Mẫu nội dung",
-        href: "/content/templates",
-        icon: FileCode,
-      },
-      {
-        title: "Cấu hình AI",
-        href: "/content/settings",
-        icon: Brain,
-      },
-      {
-        title: "AI Playground",
-        href: "/content/ai-playground",
-        icon: Zap,
+        title: "Hoạt động",
+        href: "/workspace/activity",
+        icon: Activity,
+        requiredPermission: "tasks.read",
       },
     ],
   },
+
+  // ── PRODUCTS SECTION ──────────────────────────────────────────────────────────
   {
     title: "Hàng hoá",
     href: "/products",
     icon: Package,
+    requiredPermission: "products.read",
     children: [
       {
         title: "Sản phẩm",
@@ -137,12 +122,12 @@ export const NAV_ITEMS: NavItem[] = [
       {
         title: "Danh mục",
         href: "/products/categories",
-        icon: FolderTree,
+        icon: FolderKanban,
       },
       {
         title: "Thẻ",
         href: "/products/tags",
-        icon: Tags,
+        icon: Tag,
       },
       {
         title: "Thương hiệu",
@@ -152,7 +137,7 @@ export const NAV_ITEMS: NavItem[] = [
       {
         title: "Thuộc tính",
         href: "/products/attributes",
-        icon: Settings2,
+        icon: Settings,
       },
       {
         title: "Biến thể",
@@ -171,10 +156,13 @@ export const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
+
+  // ── SALES SECTION ──────────────────────────────────────────────────────────────
   {
     title: "Bán hàng",
     href: "/sales",
     icon: ShoppingBag,
+    requiredPermission: "sales.read",
     children: [
       {
         title: "Tổng quan bán hàng",
@@ -187,9 +175,9 @@ export const NAV_ITEMS: NavItem[] = [
         icon: Receipt,
       },
       {
-        title: "Tạo đơn hàng (POS)",
+        title: "POS",
         href: "/sales/pos",
-        icon: ShoppingBag,
+        icon: ShoppingCart,
       },
       {
         title: "Thanh toán",
@@ -219,7 +207,7 @@ export const NAV_ITEMS: NavItem[] = [
       {
         title: "Báo giá",
         href: "/sales/quotes",
-        icon: FileTextIcon,
+        icon: FileText,
       },
       {
         title: "Nhật ký bán hàng",
@@ -228,15 +216,18 @@ export const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
+
+  // ── CUSTOMERS SECTION ─────────────────────────────────────────────────────────
   {
     title: "Khách hàng",
     href: "/customers",
-    icon: Users,
+    icon: UsersIcon,
+    requiredPermission: "customers.read",
     children: [
       {
         title: "Danh sách khách hàng",
         href: "/customers",
-        icon: Users,
+        icon: UsersIcon,
       },
       {
         title: "Nhóm khách hàng",
@@ -261,7 +252,7 @@ export const NAV_ITEMS: NavItem[] = [
       {
         title: "Kịch bản chăm sóc",
         href: "/customers/care-scenarios",
-        icon: Zap,
+        icon: Sparkles,
       },
       {
         title: "Phân khúc khách hàng",
@@ -275,139 +266,130 @@ export const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
+
+  // ── SETTINGS SECTION ──────────────────────────────────────────────────────────
+  // Only super_admin can see and access Settings
   {
-    title: "Quản trị",
-    href: "/staff",
-    icon: Shield,
+    title: "Cài đặt",
+    href: "/settings/app",
+    icon: Settings,
+    requiredPermission: "settings.manage",
     children: [
       {
-        title: "Nhân viên",
-        href: "/staff",
-        icon: Users,
-      },
-      {
-        title: "Vai trò",
-        href: "/staff/roles",
-        icon: Shield,
-      },
-      {
-        title: "Phân quyền",
-        href: "/staff/permissions",
+        title: "Cấu hình ứng dụng",
+        href: "/settings/app",
         icon: Settings,
-      },
-    ],
-  },
-  {
-    title: "Quản lý Dự án",
-    href: "/workspace",
-    icon: FolderKanban,
-    children: [
-      {
-        title: "Tổng quan Workspace",
-        href: "/workspace",
-        icon: LayoutDashboard,
+        requiredPermission: "settings.manage",
       },
       {
-        title: "Dự án",
-        href: "/projects",
-        icon: Target,
+        title: "Cấu hình AI",
+        href: "/settings/ai",
+        icon: Brain,
+        requiredPermission: "ai_engine.manage",
       },
       {
-        title: "Chiến dịch",
-        href: "/campaigns",
-        icon: Zap,
-      },
-      {
-        title: "Công việc",
-        href: "/tasks",
-        icon: CheckSquare,
-      },
-      {
-        title: "Media Workflow",
-        href: "/media-workflow",
-        icon: Clapperboard,
-      },
-      {
-        title: "Thực tập sinh",
-        href: "/interns",
-        icon: GraduationCap,
-      },
-      {
-        title: "Lịch làm việc",
-        href: "/workspace/calendar",
-        icon: Calendar,
+        title: "Người dùng",
+        href: "/settings/users",
+        icon: UsersIcon,
+        requiredPermission: "users.read",
       },
       {
         title: "Hoạt động",
-        href: "/workspace/activity",
+        href: "/settings/activity",
         icon: Activity,
+        requiredPermission: "settings.manage",
       },
     ],
   },
-  {
-    title: "Cài đặt",
-    href: "/settings",
-    icon: Settings,
-  },
 ];
+
+// ── Legacy navigation items (soft-deprecated — kept for compatibility mapping)
+// These items are no longer shown in the sidebar but remain as reference.
+export const DEPRECATED_NAV_ITEMS = {
+  NOI_DUNG: ["/content","/content/ai-generator","/content/facebook-posts","/content/website-posts","/content/video-scripts","/content/image-prompts","/content/calendar","/content/library","/content/templates","/content/media-prompts","/content/settings"],
+  AI_STUDIO: ["/content/settings","/content/ai-playground"],
+  QUAN_LY_DU_AN: ["/workspace","/workspace/activity","/workspace/calendar"],
+  STANDALONE: ["/staff","/staff/roles","/staff/permissions","/interns","/notifications","/migration"],
+};
 
 export const NAV_TOP: NavItem[] = [
-  {
-    title: "Mỹ Tho Laptop",
-    href: "/dashboard",
-    icon: Laptop,
-  },
+  { title: "Mỹ Tho Laptop", href: "/dashboard", icon: Laptop },
 ];
 
-/**
- * Check if current path exactly matches the href.
- */
+// ── Route Redirect Map (old → new)
+export const ROUTE_REDIRECTS: Record<string, string> = {
+  "/content": "/content",
+  "/content/ai-generator": "/content",
+  "/content/facebook-posts": "/content",
+  "/content/website-posts": "/content",
+  "/content/video-scripts": "/content",
+  "/content/image-prompts": "/content",
+  "/content/media-prompts": "/media-workflow",
+  "/content/calendar": "/calendar",
+  "/content/library": "/content",
+  "/content/templates": "/content",
+  "/content/settings": "/settings/ai",
+  "/interns": "/team/interns",
+  "/staff": "/settings/users",
+  "/staff/roles": "/settings/users?tab=roles",
+  "/staff/permissions": "/settings/users?tab=permissions",
+  "/settings/team": "/settings/users",
+  // Legacy /settings redirect to /settings/app
+  "/settings": "/settings/app",
+  // Legacy /team redirect to /workspace/members
+  "/team": "/workspace/members",
+};
+
+// ── Legacy child redirects
+export const LEGACY_CHILD_REDIRECTS: Record<string, string> = {
+  "/projects": "/projects",
+  "/campaigns": "/campaigns",
+  "/tasks": "/tasks",
+  "/media-workflow": "/media-workflow",
+};
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────
+
 export function isExactMatch(href: string, pathname: string): boolean {
   if (!href) return false;
   return pathname === href;
 }
 
-/**
- * Check if the parent item has an active child route.
- */
 export function hasActiveChild(parent: NavItem, pathname: string): boolean {
   if (!parent.children) return false;
-  return parent.children.some(
-    (child) => isExactMatch(child.href || "", pathname)
-  );
+  return parent.children.some((child) => isExactMatch(child.href || "", pathname));
 }
 
-/**
- * Check if the current path matches any child of the parent
- * OR if the pathname starts with the parent's href prefix.
- * Used to auto-expand parents when a child route is active.
- */
 export function isParentRoute(parent: NavItem, pathname: string): boolean {
   if (!parent.children) return false;
   if (!parent.href) return false;
-  // Check exact match on the parent href
   if (pathname === parent.href) return true;
-  // Check if any child is active
   if (hasActiveChild(parent, pathname)) return true;
-  // Auto-expand: if pathname starts with parent href + "/", it's an active child route
   const prefix = parent.href.endsWith("/") ? parent.href : parent.href + "/";
   if (pathname.startsWith(prefix)) return true;
   return false;
 }
 
-/**
- * Get the currently active child item from a parent.
- */
 export function getActiveChild(parent: NavItem, pathname: string): NavItem | undefined {
   if (!parent.children) return undefined;
-  return parent.children.find(
-    (child) => isExactMatch(child.href || "", pathname)
-  );
+  return parent.children.find((child) => isExactMatch(child.href || "", pathname));
+}
+
+export function isChildActive(child: NavItem, pathname: string): boolean {
+  return isExactMatch(child.href || "", pathname);
 }
 
 /**
- * Check if a child item is the active route.
+ * Resolve redirect for a given pathname.
+ * Returns the new target path, or null if no redirect needed.
  */
-export function isChildActive(child: NavItem, pathname: string): boolean {
-  return isExactMatch(child.href || "", pathname);
+export function resolveRedirect(pathname: string): string | null {
+  // Exact match redirects
+  if (ROUTE_REDIRECTS[pathname]) return ROUTE_REDIRECTS[pathname];
+  // Child redirect overrides (check longest prefix first)
+  const sorted = Object.keys(LEGACY_CHILD_REDIRECTS).sort((a, b) => b.length - a.length);
+  for (const key of sorted) {
+    if (pathname.startsWith(key + "/")) return LEGACY_CHILD_REDIRECTS[key];
+  }
+  return null;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,6 +9,14 @@ import {
   Laptop,
   Menu,
   ImageIcon,
+  Search,
+  X,
+  CheckSquare,
+  FolderKanban,
+  Megaphone,
+  MessageSquare,
+  User,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -20,9 +28,13 @@ import {
 } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { loadCompanySettings, DEFAULT_COMPANY } from "@/lib/company-settings";
+import { useAuthStore } from "@/lib/auth/store";
+import { type Permission } from "@/lib/auth/permissions";
 import type { CompanySettings } from "@/lib/company-settings";
+import { adminFetch } from "@/lib/api/admin-fetch";
+import type { SearchResultItem } from "@/app/api/search/route";
 
 interface AdminSidebarProps {
   collapsed: boolean;
@@ -30,11 +42,66 @@ interface AdminSidebarProps {
   onMobileOpen: () => void;
 }
 
+/**
+ * Filter nav items based on user permissions from auth store.
+ * Permissions come from /api/auth/me (resolved from DB for custom roles).
+ * Rules:
+ * - Items with requiredPermission are hidden unless user has that permission (or is super_admin).
+ * - If a parent group has no visible children, the entire group is hidden.
+ * - super_admin always sees everything.
+ */
+function filterNavItems(items: typeof NAV_ITEMS, user: ReturnType<typeof useAuthStore.getState>["user"]): typeof NAV_ITEMS {
+  const userRole = user?.role as "super_admin" | "admin" | "editor" | "viewer" | undefined;
+  const userPermissions = new Set<string>(user?.permissions ?? []);
+
+  function hasPerm(perm: string): boolean {
+    if (userRole === "super_admin") return true;
+    return userPermissions.has(perm);
+  }
+
+  return items.reduce<typeof NAV_ITEMS>((acc, item) => {
+    if (item.requiredPermission && !hasPerm(item.requiredPermission)) {
+      return acc;
+    }
+
+    if (!item.children) {
+      acc.push(item);
+      return acc;
+    }
+
+    const filteredChildren = filterNavItems(item.children as typeof NAV_ITEMS, user);
+
+    if (filteredChildren.length === 0) return acc;
+
+    acc.push({ ...item, children: filteredChildren });
+    return acc;
+  }, []);
+}
+
 export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebarProps) {
   const pathname = usePathname();
+  const { user } = useAuthStore();
+
+  const filteredNavItems = useMemo(() => {
+    return filterNavItems(NAV_ITEMS, user);
+  }, [user]);
+
   const [expandedParents, setExpandedParents] = useState<Set<string>>(() => {
+    // Restore from localStorage if available
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("sidebar_expanded");
+        if (stored) {
+          const parsed = JSON.parse(stored) as string[];
+          return new Set(parsed);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    // Fallback: expand based on current route
     const initial = new Set<string>();
-    NAV_ITEMS.forEach((item) => {
+    filteredNavItems.forEach((item) => {
       if (item.children && isParentRoute(item, pathname)) {
         initial.add(item.title);
       }
@@ -42,9 +109,23 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
     return initial;
   });
 
+  // Persist expanded state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("sidebar_expanded", JSON.stringify([...expandedParents]));
+    } catch {
+      // ignore
+    }
+  }, [expandedParents]);
+
   // ─── Company branding ───────────────────────────────────────────────
   const [company, setCompany] = useState<CompanySettings>(DEFAULT_COMPANY);
   const [logoError, setLogoError] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const router = useRouter();
 
   const reloadCompany = useCallback(() => {
     setCompany(loadCompanySettings());
@@ -57,15 +138,67 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
     return () => window.removeEventListener("company-settings-changed", reloadCompany);
   }, [reloadCompany]);
 
+  // Sync active route parents (merge with existing state to preserve manual toggles)
   useEffect(() => {
-    const parents = new Set<string>();
-    NAV_ITEMS.forEach((item) => {
-      if (item.children && isParentRoute(item, pathname)) {
-        parents.add(item.title);
-      }
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      filteredNavItems.forEach((item) => {
+        if (item.children && isParentRoute(item, pathname)) {
+          next.add(item.title);
+        }
+      });
+      return next;
     });
-    setExpandedParents(parents);
-  }, [pathname]);
+  }, [pathname, filteredNavItems]);
+
+  // ─── Global Search ─────────────────────────────────────────────────
+  const doSearch = useCallback(async (q: string) => {
+    if (!q || q.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const res = await adminFetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults((data.results ?? []).slice(0, 8));
+      }
+    } catch {
+      // silent
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => doSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, doSearch]);
+
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchQuery("");
+      setSearchResults([]);
+    }
+  }, [searchOpen]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setSearchOpen(false);
+      setSearchQuery("");
+    }
+  };
+
+  const ENTITY_ICONS: Record<string, React.ElementType> = {
+    task: CheckSquare,
+    project: FolderKanban,
+    campaign: Megaphone,
+    comment: MessageSquare,
+    user: User,
+    activity: Activity,
+  };
 
   const toggleExpand = (title: string) => {
     setExpandedParents((prev) => {
@@ -238,9 +371,77 @@ export function AdminSidebar({ collapsed, onToggle, onMobileOpen }: AdminSidebar
         </Button>
       </div>
 
+      {/* Search bar */}
+      {!collapsed && (
+        <div className="px-3 pt-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={handleSearchKeyDown}
+              className="w-full h-8 pl-8 pr-7 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => { setSearchQuery(""); setSearchResults([]); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+            {isSearching && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <div className="size-3 border-2 border-slate-300 border-t-primary rounded-full animate-spin" />
+              </div>
+            )}
+            {/* Search results dropdown */}
+            {searchOpen && searchQuery.length >= 2 && (
+              <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                {searchResults.length > 0 ? (
+                  <div className="py-1">
+                    <div className="px-3 py-1 text-xs font-medium text-slate-400 uppercase tracking-wide">
+                      {searchResults.length} kết quả
+                    </div>
+                    {searchResults.map((result) => {
+                      const Icon = ENTITY_ICONS[result.type] || Activity;
+                      return (
+                        <button
+                          key={result.id}
+                          onClick={() => {
+                            router.push(result.href);
+                            setSearchOpen(false);
+                            setSearchQuery("");
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 transition-colors"
+                        >
+                          <Icon className="size-4 shrink-0 text-slate-400" />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-slate-800 truncate">{result.title}</div>
+                            <div className="text-xs text-slate-400 truncate">{result.subtitle}</div>
+                          </div>
+                          <span className="text-xs text-slate-400 shrink-0 capitalize">{result.type}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : !isSearching ? (
+                  <div className="px-3 py-4 text-center text-xs text-slate-400">
+                    Không có kết quả cho "{searchQuery}"
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {NAV_ITEMS.map((item) => renderNavItem(item))}
+        {filteredNavItems.map((item) => renderNavItem(item))}
       </nav>
 
       {/* Collapse toggle */}

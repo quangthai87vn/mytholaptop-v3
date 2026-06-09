@@ -7,6 +7,8 @@ import { AdminHeader } from "./admin-header";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CompanySettingsProvider } from "@/lib/company-settings";
 import { useUISettings } from "@/hooks/use-ui-settings";
+import { useAuthStore } from "@/lib/auth/store";
+import { useRouter } from "next/navigation";
 
 export default function AdminLayout({
   children,
@@ -26,12 +28,29 @@ function AdminLayoutInner({
   children: React.ReactNode;
 }) {
   const { settings: uiSettings } = useUISettings();
+  const { user, checkSession, isChecking } = useAuthStore();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // Track whether initial session check has run — avoid redirect before first check completes
+  const [authChecked, setAuthChecked] = useState(false);
 
+  // Hydrate auth session on mount — ensures header always has user after refresh
   useEffect(() => {
     setMounted(true);
+    checkSession().finally(() => setAuthChecked(true));
+  }, [checkSession]);
+
+  // Guard: only redirect after initial auth check completes and confirms no session
+  useEffect(() => {
+    if (mounted && authChecked && user === null) {
+      const currentPath = window.location.pathname;
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+    }
+  }, [mounted, authChecked, user, router]);
+
+  useEffect(() => {
     const savedCollapsed = localStorage.getItem("admin-sidebar-collapsed");
     if (savedCollapsed === "true") {
       setCollapsed(true);

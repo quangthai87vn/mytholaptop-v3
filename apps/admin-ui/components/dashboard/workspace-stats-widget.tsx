@@ -11,13 +11,14 @@ const STAT_ITEMS = [
   { key: "active_projects", label: "Dự án đang hoạt động", icon: Target, color: "text-red-600 bg-red-50" },
   { key: "due_this_week", label: "Đến hạn tuần này", icon: Clock, color: "text-orange-600 bg-orange-50" },
   { key: "overdue_tasks", label: "Công việc quá hạn", icon: AlertTriangle, color: "text-red-700 bg-red-100" },
+  { key: "overdue_campaigns", label: "Chiến dịch quá hạn", icon: AlertTriangle, color: "text-pink-700 bg-pink-100" },
   { key: "published_this_month", label: "Đã đăng tháng này", icon: Clapperboard, color: "text-green-600 bg-green-50" },
   { key: "total_interns", label: "Thực tập sinh", icon: GraduationCap, color: "text-purple-600 bg-purple-50" },
 ] as const;
 
 export function WorkspaceStatsWidget({ stats }: WorkspaceStatsWidgetProps) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {STAT_ITEMS.map(({ key, label, icon: Icon, color }) => {
         const value = stats[key];
         return (

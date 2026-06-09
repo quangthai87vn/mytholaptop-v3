@@ -2,31 +2,32 @@
 
 import { cn } from "@/lib/utils";
 import type { Task } from "@/lib/workspace/types";
-import { PRIORITY_CONFIG } from "@/lib/workspace/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AlertTriangle, Clock, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface DeadlineAlertWidgetProps {
   tasks: Task[];
 }
 
 export function DeadlineAlertWidget({ tasks }: DeadlineAlertWidgetProps) {
+  const router = useRouter();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const overdue = tasks.filter(
-    (t) => t.due_date && new Date(t.due_date) < today && t.status !== "done"
+    (t) => t.due_date && new Date(t.due_date) < today && t.status !== "completed"
   );
   const dueToday = tasks.filter(
     (t) =>
       t.due_date &&
       new Date(t.due_date).toDateString() === today.toDateString() &&
-      t.status !== "done"
+      t.status !== "completed"
   );
   const dueSoon = tasks.filter((t) => {
-    if (!t.due_date || t.status === "done") return false;
+    if (!t.due_date || t.status === "completed") return false;
     const d = new Date(t.due_date);
     d.setHours(0, 0, 0, 0);
     const diff = (d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
@@ -61,7 +62,6 @@ export function DeadlineAlertWidget({ tasks }: DeadlineAlertWidgetProps) {
             const dueDate = task.due_date ? new Date(task.due_date) : null;
             const isOverdue = dueDate && dueDate < today;
             const isDueToday = dueDate && dueDate.toDateString() === today.toDateString();
-            const priority = PRIORITY_CONFIG[task.priority];
 
             return (
               <div
@@ -74,12 +74,12 @@ export function DeadlineAlertWidget({ tasks }: DeadlineAlertWidgetProps) {
                     ? "border-orange-200 bg-orange-50/50 border-l-4 border-l-orange-500"
                     : "border-slate-100"
                 )}
-                onClick={() => (window.location.href = `/tasks/${task.id}`)}
+                onClick={() => router.push(`/tasks/${task.id}`)}
               >
-                {/* Priority icon */}
-                <div className={cn("size-8 rounded-full flex items-center justify-center shrink-0", priority.bgColor)}>
+                {/* Status icon */}
+                <div className={cn("size-8 rounded-full flex items-center justify-center shrink-0", isOverdue ? "bg-red-100" : isDueToday ? "bg-orange-100" : "bg-slate-100")}>
                   {isOverdue ? (
-                    <AlertTriangle className={cn("size-4", priority.color)} />
+                    <AlertTriangle className="size-4 text-red-500" />
                   ) : (
                     <Clock className={cn("size-4", isDueToday ? "text-orange-500" : "text-slate-400")} />
                   )}

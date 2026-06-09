@@ -6,10 +6,9 @@ import {
   Settings,
   LogOut,
   ChevronDown,
-  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,14 +18,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-
-const CURRENT_USER = {
-  name: "Nguyễn Văn Admin",
-  email: "admin@mytholaptop.vn",
-  role: "Quản trị viên",
-  avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-  initials: "AD",
-};
+import { useAuthStore } from "@/lib/auth/store";
+import { ROLE_LABELS } from "@/lib/auth/permissions";
 
 interface UserMenuProps {
   /** Trigger button variant: 'ghost' (default in header) or 'link' */
@@ -36,8 +29,15 @@ interface UserMenuProps {
 
 export function UserMenu({ variant = "ghost", className }: UserMenuProps) {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
 
-  const handleSignOut = () => {
+  const initials = user?.full_name
+    ? user.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    : "?";
+
+  const handleSignOut = async () => {
+    await logout();
     router.push("/login");
   };
 
@@ -52,39 +52,39 @@ export function UserMenu({ variant = "ghost", className }: UserMenuProps) {
           )}
         >
           <Avatar className="size-8 shrink-0">
-            <AvatarImage src={CURRENT_USER.avatarUrl} alt={CURRENT_USER.name} />
             <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-              {CURRENT_USER.initials}
+              {initials}
             </AvatarFallback>
           </Avatar>
-          <div className="hidden lg:flex flex-col items-start gap-0.5">
-            <span className="text-sm font-medium leading-none">{CURRENT_USER.name}</span>
-            <span className="text-[11px] text-muted-foreground leading-none">
-              {CURRENT_USER.role}
-            </span>
-          </div>
+          {user && (
+            <div className="hidden lg:flex flex-col items-start gap-0.5">
+              <span className="text-sm font-medium leading-none">{user.full_name}</span>
+              <span className="text-[11px] text-muted-foreground leading-none">
+                {ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ?? user.role}
+              </span>
+            </div>
+          )}
           <ChevronDown className="hidden lg:block size-3 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel className="font-normal">
-          <div className="flex items-center gap-3 px-1 py-1">
-            <Avatar className="size-9">
-              <AvatarImage src={CURRENT_USER.avatarUrl} alt={CURRENT_USER.name} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-                {CURRENT_USER.initials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <p className="text-sm font-medium leading-none truncate">
-                {CURRENT_USER.name}
-              </p>
-              <p className="text-[11px] text-muted-foreground leading-none truncate">
-                {CURRENT_USER.email}
-              </p>
+          {user ? (
+            <div className="flex items-center gap-3 px-1 py-1">
+              <Avatar className="size-9">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <p className="text-sm font-medium leading-none truncate">{user.full_name}</p>
+                <p className="text-[11px] text-muted-foreground leading-none truncate">{user.email}</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Chưa đăng nhập</p>
+          )}
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator />

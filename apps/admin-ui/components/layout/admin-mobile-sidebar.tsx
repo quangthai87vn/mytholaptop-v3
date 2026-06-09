@@ -12,8 +12,12 @@ import {
   isChildActive,
   type NavItem,
 } from "@/lib/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { loadCompanySettings, DEFAULT_COMPANY } from "@/lib/company-settings";
+import { useAuthStore } from "@/lib/auth/store";
+import { hasPermission } from "@/lib/auth/permissions";
+import type { Permission } from "@/lib/auth/permissions";
+import type { AdminUser } from "@/lib/auth/session";
 import type { CompanySettings } from "@/lib/company-settings";
 
 interface AdminMobileSidebarProps {
@@ -23,9 +27,26 @@ interface AdminMobileSidebarProps {
 
 export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
   const pathname = usePathname();
+  const { user } = useAuthStore();
+
+  const filteredNavItems = useMemo(() => {
+    function filterItems(items: typeof NAV_ITEMS): typeof NAV_ITEMS {
+      return items.filter((item) => {
+        if (!item.requiredPermission) return true;
+        if (user?.role === "super_admin") return true;
+        if (!user) return false;
+        return hasPermission(user as AdminUser, item.requiredPermission as Permission);
+      }).map((item) => {
+        if (!item.children) return item;
+        return { ...item, children: filterItems(item.children as typeof NAV_ITEMS) };
+      });
+    }
+    return filterItems(NAV_ITEMS);
+  }, [user]);
+
   const [expandedParents, setExpandedParents] = useState<Set<string>>(() => {
     const initial = new Set<string>();
-    NAV_ITEMS.forEach((item) => {
+    filteredNavItems.forEach((item) => {
       if (item.children && isParentRoute(item, pathname)) {
         initial.add(item.title);
       }
@@ -160,7 +181,7 @@ export function AdminMobileSidebar({ open, onClose }: AdminMobileSidebarProps) {
           </Link>
         </SheetHeader>
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {NAV_ITEMS.map((item) => renderNavItem(item))}
+          {filteredNavItems.map((item) => renderNavItem(item))}
         </nav>
       </SheetContent>
     </Sheet>
