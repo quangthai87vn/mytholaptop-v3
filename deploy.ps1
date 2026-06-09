@@ -2,32 +2,39 @@
 # MTL Commerce - Deploy Script for Windows (PowerShell)
 # =============================================
 # Usage:
-#   1. Edit các giá trị biến bên dưới nếu cần
+#   1. Ensure .env file exists with required variables
 #   2. Run: .\deploy.ps1
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "===== MTL Commerce Deploy =====" -ForegroundColor Cyan
 
-# --- Config (sửa các giá trị bên dưới nếu cần) ---
+# --- Load environment variables from .env file ---
+$envFile = ".env"
+if (-not (Test-Path $envFile)) {
+    Write-Host "ERROR: .env file not found. Please create it from .env.dev or .env.prod.example" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Loading environment from $envFile..." -ForegroundColor Yellow
+Get-Content $envFile | Where-Object { $_ -match "^[A-Za-z_].*=" } | ForEach-Object {
+    $parts = $_.Split("=", 2)
+    if ($parts.Length -eq 2) {
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim()
+        [System.Environment]::SetEnvironmentVariable($key, $value, "Process")
+    }
+}
+
 $env:NODE_ENV = "production"
-$env:DATABASE_URL = "postgresql://mytholaptop_user:1Passw0rdphatxitnhat@postgresql.mtl.vn:7000/mytholaptop"
-$env:REDIS_URL = "redis://redis:6379"
-$env:JWT_SECRET = "supersecret_dev_local_2026"
-$env:COOKIE_SECRET = "supersecret_dev_local_2026"
-$env:STORE_CORS = "http://localhost:7004,https://admin.mtl.vn"
-$env:ADMIN_CORS = "http://localhost:7003,http://localhost:7004,https://admin.mtl.vn"
-$env:AUTH_CORS = "http://localhost:7003,http://localhost:7004,https://admin.mtl.vn"
-$env:NEXT_PUBLIC_MEDUSA_BACKEND_URL = "http://backend:9000"
-$env:BACKEND_PORT = "9000"
-$env:ADMIN_PORT = "3000"
-$env:REDIS_PORT = "6379"
-# ------------------------------
+
+Write-Host "NODE_ENV: $env:NODE_ENV" -ForegroundColor Gray
+Write-Host "DATABASE_URL: $($env:DATABASE_URL -replace '://([^:]+):([^@]+)@', '://$1:***@'))" -ForegroundColor Gray
 
 Write-Host "`nBuilding and starting containers..." -ForegroundColor Yellow
 
 # Build và start containers
-docker compose -f docker-compose-prod.yml --env-file .env up -d --build
+docker compose --env-file .env up -d --build
 
 # Wait for services
 Write-Host "Waiting for services to be healthy..." -ForegroundColor Yellow
@@ -35,14 +42,14 @@ Start-Sleep -Seconds 10
 
 # Check status
 Write-Host "`n===== Container Status =====" -ForegroundColor Cyan
-docker compose -f docker-compose-prod.yml ps
+docker compose ps
 
 # Check logs
 Write-Host "`n===== Backend Logs (last 20 lines) =====" -ForegroundColor Cyan
-docker compose -f docker-compose-prod.yml logs --tail=20 backend
+docker compose logs --tail=20 backend
 
 Write-Host "`n===== Admin UI Logs (last 20 lines) =====" -ForegroundColor Cyan
-docker compose -f docker-compose-prod.yml logs --tail=20 admin-ui
+docker compose logs --tail=20 admin-ui
 
 Write-Host "`n===== Done! =====" -ForegroundColor Green
 Write-Host "Services should be available at:" -ForegroundColor Green
