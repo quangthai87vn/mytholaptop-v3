@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Plus,
   Search,
@@ -21,6 +22,7 @@ import {
   RefreshCcw,
   Info,
   Trash,
+  Settings,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,6 +75,7 @@ import {
   useUpdateCollection,
   useDeleteCollection,
   useDeleteCollections,
+  useProductDataSource,
 } from "@/hooks/use-medusa";
 import type { MedusaCollection } from "@/services/medusa-types";
 import { toast } from "sonner";
@@ -133,8 +136,26 @@ export default function BrandsPage() {
   const [formRank, setFormRank] = useState<number | undefined>(undefined);
   const [autoHandle, setAutoHandle] = useState(true);
 
-  const { data, isLoading, isError, error, refetch } = useCollections({ limit: 1000 });
-  const collections = data?.data?.product_collections ?? data?.data?.collections ?? [];
+  // ── Data source routing ──────────────────────────────────────────────────────
+  const { data: productSource } = useProductDataSource();
+  const isWooSource = (productSource ?? "woocommerce") === "woocommerce";
+
+  // ── Medusa data ─────────────────────────────────────────────────────────────
+  const {
+    data: medusaData,
+    isLoading: isMedusaLoading,
+    isError: isMedusaError,
+    error: medusaError,
+    refetch: refetchMedusa,
+  } = useCollections({ limit: 1000 });
+
+  const isLoading = isWooSource ? false : isMedusaLoading;
+  const isError = isWooSource ? false : isMedusaError;
+  const error = isWooSource ? undefined : medusaError;
+  const refetch = isWooSource ? () => {} : refetchMedusa;
+  const sourceLabel = isWooSource ? "WooCommerce" : "Medusa";
+
+  const collections = medusaData?.data?.product_collections ?? medusaData?.data?.collections ?? [];
 
   const brands: BrandRow[] = useMemo(() => {
     return collections.map((c) => {
@@ -266,7 +287,7 @@ export default function BrandsPage() {
           handleDrawerClose();
           refetch();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Cập nhật thương hiệu thất bại");
         }
       } else {
         const result = await createCollection.mutateAsync(payload);
@@ -275,7 +296,7 @@ export default function BrandsPage() {
           handleDrawerClose();
           refetch();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Cập nhật thương hiệu thất bại");
         }
       }
     } catch {
@@ -301,7 +322,7 @@ export default function BrandsPage() {
         });
         refetch();
       } else {
-        toast.error(`Lỗi: ${result.error}`);
+        toast.error("Lỗi: Cập nhật thương hiệu thất bại");
       }
     } catch {
       toast.error("Có lỗi xảy ra");
@@ -370,7 +391,7 @@ export default function BrandsPage() {
             Quản lý thương hiệu
           </h1>
           <p className="text-muted-foreground">
-            Quản lý thương hiệu sản phẩm trong cửa hàng.
+            Quản lý thương hiệu sản phẩm từ {sourceLabel}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -378,10 +399,20 @@ export default function BrandsPage() {
             <RefreshCw className="size-4 mr-2" />
             Làm mới
           </Button>
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="size-4 mr-2" />
-            Thêm thương hiệu
-          </Button>
+          {!isWooSource && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="size-4 mr-2" />
+              Thêm thương hiệu
+            </Button>
+          )}
+          {isWooSource && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/settings/app">
+                <Settings className="size-4 mr-2" />
+                Đổi nguồn dữ liệu
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

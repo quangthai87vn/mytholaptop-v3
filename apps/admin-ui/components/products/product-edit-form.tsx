@@ -385,7 +385,7 @@ export function ProductEditForm({ product, onSuccess }: ProductEditFormProps) {
         onSuccess?.();
         router.push("/products");
       } else {
-        toast.error(`Lỗi: ${result.error}`);
+        toast.error("Lỗi: Cập nhật sản phẩm thất bại");
       }
     } catch {
       toast.error("Có lỗi xảy ra khi lưu");

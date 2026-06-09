@@ -1,6 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAppSetting } from "@/lib/content/db/app-settings";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { decrypt } from "@/lib/content/db/encryption";
+
+/**
+ * Load WooCommerce credentials from database (app_settings table).
+ * Credentials are encrypted at rest — decrypt before use.
+ * Never accept credentials from query params.
+ */
+async function loadWooCommerceCredentials(): Promise<{
+  baseUrl: string;
+  consumerKey: string;
+  consumerSecret: string;
+} | null> {
+  try {
+    const woo = await getAppSetting("wooCommerce");
+    if (!woo) return null;
+    const w = woo as Record<string, unknown>;
+
+    const rawUrl = w.wordpressUrl as string | undefined;
+    const rawKey = w.consumerKey as string | undefined;
+    const rawSecret = w.consumerSecret as string | undefined;
+    const keyIv = w._consumerKey_iv as string | undefined;
+    const secretIv = w._consumerSecret_iv as string | undefined;
+
+    const baseUrl = rawUrl || "";
+
+    let consumerKey = "";
+    let consumerSecret = "";
+
+    if (rawKey && keyIv) {
+      try { consumerKey = decrypt(rawKey, keyIv); } catch { consumerKey = rawKey; }
+    } else if (rawKey) {
+      consumerKey = rawKey;
+    }
+
+    if (rawSecret && secretIv) {
+      try { consumerSecret = decrypt(rawSecret, secretIv); } catch { consumerSecret = rawSecret; }
+    } else if (rawSecret) {
+      consumerSecret = rawSecret;
+    }
+
+    if (!baseUrl || !consumerKey || !consumerSecret) return null;
+    return { baseUrl, consumerKey, consumerSecret };
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   const { slug } = await params;
   const endpoint = slug.join("/");
   const searchParams = req.nextUrl.searchParams.toString();
@@ -10,6 +61,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const { slug } = await params;
+  const endpoint = slug.join("/");
+  const url = `/wp-json/wc/v3/${endpoint}`;
+
+  return proxyRequest(url, req);
+}
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   const { slug } = await params;
   const endpoint = slug.join("/");
   const url = `/wp-json/wc/v3/${endpoint}`;
@@ -19,32 +84,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
 async function proxyRequest(targetPath: string, req: NextRequest) {
   try {
-    const baseUrl = req.nextUrl.searchParams.get("baseUrl");
-    const consumerKey = req.nextUrl.searchParams.get("consumerKey");
-    const consumerSecret = req.nextUrl.searchParams.get("consumerSecret");
+    // P5.4 Security: credentials come from DB only, NOT from query params
+    const creds = await loadWooCommerceCredentials();
 
-    if (!baseUrl || !consumerKey || !consumerSecret) {
+    if (!creds) {
       return NextResponse.json(
-        { error: "Missing required parameters: baseUrl, consumerKey, consumerSecret" },
+        { error: "Chưa cấu hình WooCommerce. Vui lòng cấu hình Consumer Key/Secret trong Settings." },
         { status: 400 }
       );
     }
 
-    const url = new URL(targetPath, baseUrl);
-    url.searchParams.set("consumer_key", consumerKey);
-    url.searchParams.set("consumer_secret", consumerSecret);
-
-    // Remove our custom params
-    url.searchParams.delete("baseUrl");
-    url.searchParams.delete("consumerKey");
-    url.searchParams.delete("consumerSecret");
+    const url = new URL(targetPath, creds.baseUrl);
+    // Inject credentials server-side — never expose in URL
+    url.searchParams.set("consumer_key", creds.consumerKey);
+    url.searchParams.set("consumer_secret", creds.consumerSecret);
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
     let body: string | undefined;
-    if (req.method === "POST") {
+    if (req.method === "POST" || req.method === "PUT") {
       body = await req.text();
     }
 

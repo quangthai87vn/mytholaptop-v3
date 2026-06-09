@@ -8,6 +8,7 @@ interface ProductCardGridProps {
   products: AdaptedProduct[];
   columns: number;
   selectedIds: Set<string>;
+  activeSource?: "woocommerce" | "medusa";
   onToggleSelect: (id: string) => void;
   onView: (product: AdaptedProduct) => void;
   onEdit: (product: AdaptedProduct) => void;
@@ -25,6 +26,7 @@ export function ProductCardGrid({
   products,
   columns,
   selectedIds,
+  activeSource,
   onToggleSelect,
   onView,
   onEdit,
@@ -40,6 +42,7 @@ export function ProductCardGrid({
           key={product.id}
           product={product}
           selected={selectedIds.has(product.id)}
+          activeSource={activeSource}
           onToggleSelect={onToggleSelect}
           onView={onView}
           onEdit={onEdit}

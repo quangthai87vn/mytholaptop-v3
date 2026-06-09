@@ -3,10 +3,12 @@
  * GET /api/admin/products/check-sku?sku=xxx&excludeId=yyy
  * - sku: SKU to check
  * - excludeId: Product ID to exclude (for update validation)
+ *
+ * P4.2: Reads credentials directly from database, not via /api/settings.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getMedusaSettings } from "@/services/medusa-settings";
+import { getAppSetting } from "@/lib/content/db/app-settings";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -18,18 +20,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Get Medusa config from settings
-    const config = await getMedusaSettings();
-    if (!config) {
-      return NextResponse.json(
-        { error: "Medusa is not configured" },
-        { status: 401 }
-      );
+    // P4.2: Read credentials directly from DB — no frontend exposure
+    const medusaRaw = await getAppSetting("medusa");
+    if (!medusaRaw) {
+      return NextResponse.json({ error: "Medusa not configured" }, { status: 500 });
     }
-
-    // Call Medusa admin API directly (server-side)
-    const backendUrl = config.backendUrl.replace(/\/$/, "");
-    const apiKey = config.adminApiKey;
+    const m = medusaRaw as Record<string, string>;
+    const backendUrl = (m.backendUrl || "http://localhost:9000").replace(/\/$/, "");
+    const apiKey = m.adminApiKey;
 
     if (!apiKey) {
       return NextResponse.json(
@@ -59,7 +57,6 @@ export async function GET(req: NextRequest) {
     const data = await response.json();
     const products = data.products || [];
 
-    // Filter out the current product if excludeId is provided
     const duplicates = products.filter((p: { id: string; variants: Array<{ sku: string }> }) => {
       const hasSku = p.variants?.some((v) => v.sku === sku);
       return hasSku && p.id !== excludeId;

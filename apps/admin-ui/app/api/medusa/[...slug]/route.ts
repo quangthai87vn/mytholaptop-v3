@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as fsSync from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { getAppSetting } from "@/lib/content/db/app-settings";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
 
 /**
  * JWT token cache cho mỗi backend + user combination.
@@ -19,16 +18,15 @@ const tokenCache = new Map<string, CachedToken>();
  * Docker uses internal hostnames like "backend", "medusa" that don't resolve locally.
  */
 function normalizeBackendUrl(url: string): string {
+  if (!url) return "";
   let normalized = url.replace(/\/$/, "");
 
-  // Handle Docker internal hostnames when running outside Docker
   const dockerHostnames = ["backend", "medusa-backend", "medusa", "postgres", "redis"];
   for (const hostname of dockerHostnames) {
     if (
       normalized.startsWith(`http://${hostname}:`) ||
       normalized.startsWith(`https://${hostname}:`)
     ) {
-      // Replace with localhost for local development
       normalized = normalized.replace(`://${hostname}:`, `://localhost:`);
       break;
     }
@@ -46,7 +44,7 @@ function isTokenValid(cached: CachedToken): boolean {
 }
 
 /**
- * Load Medusa credentials from server-side settings.json.
+ * Load Medusa credentials from database (app_settings table).
  * Returns JWT token if available (preferred), or email/password for fallback auth.
  */
 async function loadServerCredentials(): Promise<{
@@ -55,29 +53,20 @@ async function loadServerCredentials(): Promise<{
   password?: string;
   backendUrl?: string;
 } | null> {
-  // Try multiple paths to find settings.json
-  const routeFileDir = path.dirname(fileURLToPath(import.meta.url));
-  const possiblePaths = [
-    path.join(routeFileDir, "..", "..", "..", "..", "data", "settings.json"),
-    path.join(process.cwd(), "data", "settings.json"),
-  ];
-  let settingsPath = "";
-  for (const p of possiblePaths) {
-    if (fsSync.existsSync(p)) { settingsPath = p; break; }
-  }
-  if (!settingsPath) {
-    console.warn("[MedusaProxy] settings.json not found in any path:", possiblePaths);
-    return null;
-  }
   try {
-    const content = fsSync.readFileSync(settingsPath, "utf-8");
-    const settings = JSON.parse(content);
-    if (!settings.medusa) return null;
+    const medusa = await getAppSetting("medusa");
+    if (!medusa) return null;
+    const m = medusa as Record<string, string>;
+    const isJwt = (key: string) => key.startsWith("eyJ") && key.split(".").length === 3;
+    // JWT token can be stored in adminApiKey or adminPassword
+    const storedJwt = (m.adminApiKey && isJwt(m.adminApiKey))
+      ? m.adminApiKey
+      : (m.adminPassword && isJwt(m.adminPassword) ? m.adminPassword : undefined);
     return {
-      backendUrl: settings.medusa.backendUrl,
-      jwtToken: settings.medusa.adminApiKey?.startsWith("eyJ") ? settings.medusa.adminApiKey : undefined,
-      email: settings.medusa.adminEmail,
-      password: settings.medusa.adminPassword,
+      backendUrl: m.backendUrl,
+      jwtToken: storedJwt,
+      email: m.adminEmail,
+      password: m.adminPassword,
     };
   } catch {
     return null;
@@ -151,9 +140,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
   const { slug } = await params;
   const endpoint = "/" + slug.join("/");
-
   return proxyRequest(endpoint, req);
 }
 
@@ -161,9 +151,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
   const { slug } = await params;
   const endpoint = "/" + slug.join("/");
-
   return proxyRequest(endpoint, req);
 }
 
@@ -171,9 +162,10 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
   const { slug } = await params;
   const endpoint = "/" + slug.join("/");
-
   return proxyRequest(endpoint, req);
 }
 
@@ -182,48 +174,39 @@ async function proxyRequest(
   req: NextRequest,
   method?: string
 ) {
-  const backendUrlParam = req.nextUrl.searchParams.get("backendUrl");
-  const adminApiKeyParam = req.nextUrl.searchParams.get("adminApiKey");
-  const adminEmailParam = req.nextUrl.searchParams.get("adminEmail");
-  const adminPasswordParam = req.nextUrl.searchParams.get("adminPassword");
-
-  if (!backendUrlParam) {
+  const serverCreds = await loadServerCredentials();
+  if (!serverCreds) {
     return NextResponse.json(
-      { error: "Missing required parameter: backendUrl" },
+      {
+        error: "Chưa lưu Medusa configuration. Vui lòng vào Cấu hình ứng dụng.",
+        code: "missing_config",
+        hint: "Truy cập /settings/app → tab Medusa → nhập Backend URL và lưu.",
+      },
       { status: 400 }
     );
   }
 
-  // Priority 1: Load JWT token from server-side settings.json (always works)
-  // Priority 2: Use JWT token passed as adminApiKey (if eyJ... format)
-  // Priority 3: Authenticate with email/password (fallback)
   let authToken = "";
-  let actualBackendUrl = normalizeBackendUrl(backendUrlParam);
-
-  // Load server-side credentials
-  const serverCreds = await loadServerCredentials();
+  let actualBackendUrl = serverCreds.backendUrl
+    ? normalizeBackendUrl(serverCreds.backendUrl)
+    : normalizeBackendUrl(req.nextUrl.searchParams.get("backendUrl") || "");
 
   if (serverCreds?.jwtToken) {
-    // Use JWT token from settings.json
     authToken = serverCreds.jwtToken;
     if (serverCreds.backendUrl) {
       actualBackendUrl = serverCreds.backendUrl;
     }
-  } else if (adminApiKeyParam?.startsWith("eyJ")) {
-    // Use JWT token passed as adminApiKey
-    authToken = adminApiKeyParam;
-  } else if (adminEmailParam && adminPasswordParam) {
-    // Fallback: authenticate with email/password
+  } else if (serverCreds?.email && serverCreds?.password) {
     try {
       authToken = await authenticateWithMedusa(
         actualBackendUrl,
-        adminEmailParam,
-        adminPasswordParam
+        serverCreds.email,
+        serverCreds.password
       );
     } catch (error) {
       return NextResponse.json(
         {
-          error: `JWT Authentication failed: ${error instanceof Error ? error.message : String(error)}`,
+          error: `Lỗi xác thực Medusa: ${error instanceof Error ? error.message : String(error)}`,
           code: "AUTH_FAILED",
           hint: "Kiểm tra email và password Medusa Admin trong Cài đặt.",
         },
@@ -233,23 +216,21 @@ async function proxyRequest(
   } else {
     return NextResponse.json(
       {
-        error: "Missing authentication. JWT token in settings.json or adminApiKey (JWT format) or adminEmail+adminPassword required.",
-        code: "AUTH_MISSING",
-        hint: "Vui lòng nhập Medusa Admin API Key (JWT) hoặc Email/Password trong Cài đặt Migration.",
+        error: "Chưa lưu Medusa credentials (JWT Token hoặc Email/Password). Vui lòng vào Cấu hình ứng dụng.",
+        code: "missing_token",
+        hint: "Truy cập /settings/app → tab Medusa → nhập JWT Token hoặc Email/Password rồi lưu.",
       },
       { status: 400 }
     );
   }
 
   try {
-    // Build URL: strip proxy credentials from query params, forward the rest to Medusa
     const urlObj = new URL(req.nextUrl.toString());
     const actualPath = urlObj.pathname.replace(/^\/api\/medusa/, "");
 
-    // Build query string WITHOUT auth params
     const actualQuery = new URLSearchParams();
     for (const [key, value] of urlObj.searchParams.entries()) {
-      if (key !== "backendUrl" && key !== "adminApiKey" && key !== "adminEmail" && key !== "adminPassword") {
+      if (key !== "backendUrl") {
         actualQuery.set(key, value);
       }
     }
@@ -273,7 +254,6 @@ async function proxyRequest(
       body,
     });
 
-    // Handle authentication errors with clear messages
     if (response.status === 401 || response.status === 403) {
       const errorBody = await response.text();
       let errorDetail = "";
@@ -284,13 +264,10 @@ async function proxyRequest(
         errorDetail = errorBody;
       }
 
-      // Clear cached token if rejected
-      if (adminEmailParam && adminPasswordParam) {
-        const cacheKey = getCacheKey(actualBackendUrl, adminEmailParam);
+      if (serverCreds?.email && serverCreds?.password) {
+        const cacheKey = getCacheKey(actualBackendUrl, serverCreds.email);
         tokenCache.delete(cacheKey);
       }
-
-      // If we used server JWT and it was rejected, clear server cache
       if (serverCreds?.jwtToken) {
         console.warn("[MedusaProxy] Server JWT rejected, clearing cache");
         tokenCache.clear();
@@ -299,7 +276,7 @@ async function proxyRequest(
       const isJwtFormat = authToken && authToken.split(".").length === 3;
       return NextResponse.json(
         {
-          error: "Lỗi xác thực Medusa (HTTP ${response.status}): ${errorDetail}",
+          error: `Lỗi xác thực Medusa (HTTP ${response.status}): ${errorDetail}`,
           code: "AUTH_FAILED",
           hint: isJwtFormat
             ? "Token JWT hợp lệ nhưng bị từ chối. Kiểm tra Medusa backend đang chạy và API key còn hiệu lực."
@@ -334,7 +311,6 @@ async function proxyRequest(
       } catch {
         errorDetail = data.length > 200 ? data.slice(0, 200) + "..." : data;
       }
-      // Log lỗi chi tiết để debug
       console.error(`[MedusaProxy] ${req.method} ${endpoint} → ${response.status}`, parsed || data.slice(0, 300));
       return new NextResponse(
         JSON.stringify({
@@ -368,7 +344,7 @@ async function proxyRequest(
     if (isNetworkError) {
       return NextResponse.json(
         {
-          error: `Không thể kết nối Medusa backend. Vui lòng kiểm tra Medusa backend đang chạy tại ${backendUrlParam}.`,
+          error: `Không thể kết nối Medusa backend. Vui lòng kiểm tra Medusa backend đang chạy tại ${actualBackendUrl}.`,
           code: "NETWORK_ERROR",
           hint: "Medusa backend phải đang chạy (thường ở cổng 9000).",
         },

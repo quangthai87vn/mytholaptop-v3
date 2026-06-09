@@ -90,8 +90,9 @@ export interface MedusaBatchResponse {
 }
 
 /**
- * Gọi Medusa Admin API qua proxy.
- * Ưu tiên JWT auth (email/password) > API Key.
+ * Gọi Medusa Admin API qua proxy server-side.
+ * P4.2 Security: KHÔNG truyền credentials (adminApiKey, email, password)
+ * qua URL query params — credentials được proxy load tự động từ database.
  */
 export async function medusaRequest<T>(
   endpoint: string,
@@ -99,19 +100,14 @@ export async function medusaRequest<T>(
   options: RequestInit = {}
 ): Promise<MedusaApiResponse<T>> {
   try {
-    // Sử dụng proxy API route
+    // Proxy server-side: credentials được load tự động từ DB
+    // Frontend chỉ gửi backendUrl để identify target Medusa instance
     const proxyUrl = `/api/medusa${endpoint}`;
     const url = new URL(proxyUrl, window.location.origin);
 
+    // Chỉ gửi backendUrl — không gửi credentials qua URL
+    // Proxy /api/medusa/[...slug] sẽ tự load credentials từ database
     url.searchParams.set("backendUrl", config.backendUrl);
-
-    // Ưu tiên JWT auth bằng email/password
-    if (config.adminEmail && config.adminPassword) {
-      url.searchParams.set("adminEmail", config.adminEmail);
-      url.searchParams.set("adminPassword", config.adminPassword);
-    } else if (config.adminApiKey) {
-      url.searchParams.set("adminApiKey", config.adminApiKey);
-    }
 
     const response = await fetch(url.toString(), {
       ...options,

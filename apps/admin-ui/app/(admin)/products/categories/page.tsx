@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import {
   Plus,
   Search,
@@ -16,6 +17,8 @@ import {
   PlusCircle,
   FolderSearch,
   Info,
+  Settings,
+  Globe,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,9 +56,44 @@ import {
   useCreateCategory,
   useUpdateCategory,
   useDeleteCategory,
+  useProductDataSource,
+  useWooCommerceCategories,
 } from "@/hooks/use-medusa";
 import type { MedusaCategory } from "@/services/medusa-types";
+import type { WooCategory } from "@/lib/products/product-filters";
 import { toast } from "sonner";
+
+function buildTreeFromWooCommerce(cats: WooCategory[]): CategoryNode[] {
+  const map = new Map<string, CategoryNode>();
+  const roots: CategoryNode[] = [];
+
+  cats.forEach((cat) => {
+    map.set(String(cat.id), {
+      id: String(cat.id),
+      name: cat.name,
+      handle: cat.slug || "",
+      description: cat.description || "",
+      is_active: true, // WooCommerce has no is_active, all are visible
+      parent_category_id: cat.parent ? String(cat.parent) : "",
+      level: 0,
+      children: [],
+      wooId: String(cat.id),
+    });
+  });
+
+  cats.forEach((cat) => {
+    const node = map.get(String(cat.id))!;
+    if (cat.parent && map.has(String(cat.parent))) {
+      const parent = map.get(String(cat.parent))!;
+      node.level = parent.level + 1;
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  return roots;
+}
 
 function buildCategoryTree(cats: MedusaCategory[]): CategoryNode[] {
   const map = new Map<string, CategoryNode>();
@@ -167,22 +205,51 @@ export default function CategoriesPage() {
   const [formSeoDesc, setFormSeoDesc] = useState("");
   const [autoHandle, setAutoHandle] = useState(true);
 
-  const { data, isLoading, isError, error, refetch } = useCategories({
+  // ── Data source routing ──────────────────────────────────────────────────────
+  const { data: productSource } = useProductDataSource();
+  const isWooSource = (productSource ?? "woocommerce") === "woocommerce";
+
+  // ── Medusa data ─────────────────────────────────────────────────────────────
+  const {
+    data: medusaData,
+    isLoading: isMedusaLoading,
+    isError: isMedusaError,
+    error: medusaError,
+    refetch: refetchMedusa,
+  } = useCategories({
     limit: 1000,
     include_descendants_tree: true,
   });
 
-  const categoryTree = useMemo(
-    () => buildCategoryTree(data?.data?.product_categories ?? []),
-    [data?.data?.product_categories]
-  );
+  // ── WooCommerce data ──────────────────────────────────────────────────────
+  const {
+    data: wooCategories,
+    isLoading: isWooLoading,
+    isError: isWooError,
+    error: wooError,
+    refetch: refetchWoo,
+  } = useWooCommerceCategories({ per_page: 100 });
 
-  const filteredTree = useMemo(
-    () => filterTree(categoryTree, search, statusFilter),
-    [categoryTree, search, statusFilter]
-  );
+  const isLoading = isWooSource ? isWooLoading : isMedusaLoading;
+  const isError = isWooSource ? isWooError : isMedusaError;
+  const error = isWooSource ? wooError : medusaError;
+  const refetch = isWooSource ? refetchWoo : refetchMedusa;
 
-  const totalDisplayed = useMemo(() => countNodes(filteredTree), [filteredTree]);
+  // ── Build tree ────────────────────────────────────────────────────────────
+  const categoryTree = useMemo(() => {
+    if (isWooSource) {
+      // WooCommerce: map WooCategory[] to CategoryNode[]
+      if (!wooCategories || !Array.isArray(wooCategories)) return [];
+      return buildTreeFromWooCommerce(wooCategories);
+    }
+    // Medusa: map MedusaCategory[] to CategoryNode[]
+    return buildCategoryTree(medusaData?.data?.product_categories ?? []);
+  }, [isWooSource, wooCategories, medusaData?.data?.product_categories]);
+
+  // ── Stats ────────────────────────────────────────────────────────────────
+  const createCategory = useCreateCategory();
+  const updateCategory = useUpdateCategory();
+  const deleteCategory = useDeleteCategory();
 
   const allFlat = useMemo(() => {
     const result: CategoryNode[] = [];
@@ -196,9 +263,12 @@ export default function CategoriesPage() {
     return result;
   }, [categoryTree]);
 
-  const createCategory = useCreateCategory();
-  const updateCategory = useUpdateCategory();
-  const deleteCategory = useDeleteCategory();
+  const filteredTree = useMemo(
+    () => filterTree(categoryTree, search, statusFilter),
+    [categoryTree, search, statusFilter]
+  );
+
+  const totalDisplayed = useMemo(() => countNodes(filteredTree), [filteredTree]);
 
   const handleNameChange = (name: string) => {
     setFormName(name);
@@ -232,8 +302,11 @@ export default function CategoriesPage() {
     setFormHandle(cat.handle || "");
     setFormDescription(cat.description || "");
 
-    // Load metadata from flat list
-    const catData = data?.data?.product_categories?.find((c) => c.id === cat.id);
+    // Load metadata from flat list — only available for Medusa categories
+    let catData = null;
+    if (!isWooSource && medusaData?.data?.product_categories) {
+      catData = medusaData.data.product_categories.find((c) => c.id === cat.id);
+    }
     const meta = catData?.metadata;
     setFormRank(
       meta && typeof meta === "object" && "rank" in meta
@@ -309,7 +382,7 @@ export default function CategoriesPage() {
           handleDrawerClose();
           refetch();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Cập nhật danh mục thất bại");
         }
       } else {
         const result = await createCategory.mutateAsync(payload as any);
@@ -318,7 +391,7 @@ export default function CategoriesPage() {
           handleDrawerClose();
           refetch();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Cập nhật danh mục thất bại");
         }
       }
     } catch {
@@ -335,7 +408,7 @@ export default function CategoriesPage() {
         setDeleteDialogOpen(false);
         refetch();
       } else {
-        toast.error(`Lỗi: ${result.error}`);
+        toast.error("Lỗi: Cập nhật danh mục thất bại");
       }
     } catch {
       toast.error("Có lỗi xảy ra");
@@ -346,11 +419,16 @@ export default function CategoriesPage() {
     (c) => !selectedCategory || c.id !== selectedCategory.id
   );
 
-  const catData = selectedCategory
-    ? data?.data?.product_categories?.find((c) => c.id === selectedCategory.id)
+  const catData = selectedCategory && !isWooSource
+    ? medusaData?.data?.product_categories?.find((c) => c.id === selectedCategory.id)
     : null;
 
   const isSaving = createCategory.isPending || updateCategory.isPending;
+
+  // Source-aware labels
+  const sourceLabel = isWooSource ? "WooCommerce" : "Medusa";
+  const activeCount = allFlat.filter((c) => c.is_active).length;
+  const inactiveCount = isWooSource ? 0 : allFlat.filter((c) => !c.is_active).length;
 
   return (
     <div className="space-y-6">
@@ -361,13 +439,23 @@ export default function CategoriesPage() {
             Quản lý danh mục
           </h1>
           <p className="text-muted-foreground">
-            Quản lý danh mục sản phẩm trong cửa hàng.
+            Quản lý danh mục sản phẩm từ {sourceLabel}.
           </p>
         </div>
-        <Button onClick={() => openAddDialog()}>
-          <Plus className="mr-2 size-4" />
-          Thêm danh mục
-        </Button>
+        {!isWooSource && (
+          <Button onClick={() => openAddDialog()}>
+            <Plus className="mr-2 size-4" />
+            Thêm danh mục
+          </Button>
+        )}
+        {isWooSource && (
+          <Button variant="outline" asChild>
+            <Link href="/settings/app">
+              <Settings className="mr-2 size-4" />
+              Đổi nguồn dữ liệu
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -403,9 +491,11 @@ export default function CategoriesPage() {
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {allFlat.filter((c) => !c.is_active).length}
+                {inactiveCount}
               </p>
-              <p className="text-sm text-muted-foreground">Không hoạt động</p>
+              <p className="text-sm text-muted-foreground">
+                {isWooSource ? "Không phân biệt" : "Không hoạt động"}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -457,10 +547,15 @@ export default function CategoriesPage() {
           <CardContent className="flex flex-col items-center justify-center py-16">
             <AlertCircle className="size-10 text-destructive mb-3" />
             <p className="text-base font-medium text-destructive">
-              Không thể kết nối Medusa
+              {isWooSource
+                ? "Không thể kết nối WooCommerce"
+                : "Không thể kết nối Medusa"}
             </p>
             <p className="text-sm text-muted-foreground mt-1 text-center max-w-md">
-              {(error as Error)?.message || "Vui lòng kiểm tra cấu hình Medusa."}
+              {(error as Error)?.message ||
+                (isWooSource
+                  ? "Vui lòng kiểm tra cấu hình WooCommerce trong Cài đặt ứng dụng."
+                  : "Vui lòng kiểm tra cấu hình Medusa.")}
             </p>
             <Button variant="outline" className="mt-4" onClick={() => refetch()}>
               Thử lại

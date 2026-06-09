@@ -20,14 +20,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as fsSync from "fs";
 import * as path from "path";
-import { fileURLToPath } from "url";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
+import { requireCsrf } from "@/lib/auth/csrf";
 
-// Resolve __dirname equivalent in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Navigate from apps/admin-ui/app/api/medusa/upload-media/ to apps/admin-ui/
-const ADMIN_UI_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
+    // Navigate from apps/admin-ui/app/api/medusa/upload-media/ to apps/admin-ui/
+    const ADMIN_UI_ROOT = path.resolve(/*turbopackIgnore: true*/ process.cwd(), "apps", "admin-ui");
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -171,6 +168,12 @@ function mimeTypeToExt(mimeType: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
+  const csrfError = requireCsrf(req);
+  if (csrfError) return csrfError;
+
   const startTime = Date.now();
 
   try {

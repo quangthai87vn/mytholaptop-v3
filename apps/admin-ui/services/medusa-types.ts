@@ -164,6 +164,8 @@ export interface ProductFilter {
   order?: string;
   fields?: string;
   expand?: string;
+  /** Internal: skip Medusa fetch when product_data_source = woocommerce */
+  __skipMedusa?: boolean;
 }
 
 export interface CreateProductInput {
@@ -234,6 +236,8 @@ export interface CategoryFilter {
   expand?: string;
   include_descendants_tree?: boolean;
   parent_category_id?: string | null;
+  /** Internal: skip Medusa fetch when product_data_source = woocommerce */
+  enabled?: boolean;
 }
 
 export interface CreateCategoryInput {
@@ -258,6 +262,8 @@ export interface TagFilter {
   offset?: number;
   fields?: string;
   q?: string;
+  /** Internal: skip Medusa fetch when product_data_source = woocommerce */
+  __skipMedusa?: boolean;
 }
 
 export interface CreateTagInput {

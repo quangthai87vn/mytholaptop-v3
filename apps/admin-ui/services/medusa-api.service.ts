@@ -57,18 +57,22 @@ interface MedusaRequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
 }
 
+/**
+ * P4.2 Security: KHÔNG truyền credentials qua URL.
+ * Proxy server-side tự load credentials từ database.
+ */
 export async function medusaRequest<T>(
   endpoint: string,
   config: MedusaConfig,
   options: MedusaRequestOptions = {}
 ): Promise<MedusaApiResponse<T>> {
   try {
-    // Sử dụng proxy API route với credentials trong query params
+    // Proxy server-side: credentials được load tự động từ DB
     const proxyUrl = `/api/medusa${endpoint}`;
     const separator = endpoint.includes("?") ? "&" : "?";
     const params = new URLSearchParams({
       backendUrl: config.backendUrl,
-      adminApiKey: config.adminApiKey,
+      // adminApiKey KHÔNG gửi qua URL — proxy tự load từ DB
     });
     const url = `${proxyUrl}${separator}${params.toString()}`;
 

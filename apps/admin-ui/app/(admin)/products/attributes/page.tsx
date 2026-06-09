@@ -268,7 +268,7 @@ export default function AttributesPage() {
           handleDrawerClose();
           refetch();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Cập nhật thuộc tính thất bại");
         }
       } else {
         const result = await createProductType.mutateAsync({
@@ -280,7 +280,7 @@ export default function AttributesPage() {
           handleDrawerClose();
           refetch();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Tạo thuộc tính thất bại");
         }
       }
     } catch {
@@ -352,7 +352,7 @@ export default function AttributesPage() {
         setValueDrawerOpen(false);
         refetch();
       } else {
-        toast.error(`Lỗi: ${result.error}`);
+        toast.error("Lỗi: Cập nhật thuộc tính thất bại");
       }
     } catch {
       toast.error("Có lỗi xảy ra");
@@ -384,7 +384,7 @@ export default function AttributesPage() {
         toast.success("Đã xoá giá trị");
         refetch();
       } else {
-        toast.error(`Lỗi: ${result.error}`);
+        toast.error("Lỗi: Cập nhật thuộc tính thất bại");
       }
     } catch {
       toast.error("Có lỗi xảy ra");
@@ -409,7 +409,7 @@ export default function AttributesPage() {
         });
         refetch();
       } else {
-        toast.error(`Lỗi: ${result.error}`);
+        toast.error("Lỗi: Cập nhật thuộc tính thất bại");
       }
     } catch {
       toast.error("Có lỗi xảy ra");

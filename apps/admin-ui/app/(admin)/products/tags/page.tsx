@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import Link from "next/link";
 import {
   Search,
   Pencil,
@@ -18,6 +19,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Info,
+  Settings,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -62,8 +64,11 @@ import {
   useCreateTag,
   useUpdateTag,
   useDeleteTag,
+  useProductDataSource,
+  useWooCommerceTags,
 } from "@/hooks/use-medusa";
 import type { MedusaProductTag } from "@/services/medusa-types";
+import type { WooTag } from "@/hooks/use-medusa";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 50;
@@ -105,13 +110,60 @@ export default function TagsPage() {
   const [formDescription, setFormDescription] = useState("");
   const [autoSlug, setAutoSlug] = useState(true);
 
-  const { data, isLoading, isError, error, refetch } = useTags({
+  // ── Data source routing ──────────────────────────────────────────────────────
+  const { data: productSource } = useProductDataSource();
+  const isWooSource = (productSource ?? "woocommerce") === "woocommerce";
+
+  // ── Medusa data ─────────────────────────────────────────────────────────────
+  const {
+    data: medusaData,
+    isLoading: isMedusaLoading,
+    isError: isMedusaError,
+    error: medusaError,
+    refetch: refetchMedusa,
+  } = useTags({
     limit: PAGE_SIZE,
     q: search || undefined,
+    __skipMedusa: isWooSource,
   });
 
-  const tags = data?.data?.product_tags ?? [];
-  const total = data?.data?.count ?? 0;
+  // ── WooCommerce data ──────────────────────────────────────────────────────
+  const {
+    data: wooTags,
+    isLoading: isWooLoading,
+    isError: isWooError,
+    error: wooError,
+    refetch: refetchWoo,
+  } = useWooCommerceTags({ per_page: 100 });
+
+  const isLoading = isWooSource ? isWooLoading : isMedusaLoading;
+  const isError = isWooSource ? isWooError : isMedusaError;
+  const error = isWooSource ? wooError : medusaError;
+  const refetch = isWooSource ? refetchWoo : refetchMedusa;
+  const sourceLabel = isWooSource ? "WooCommerce" : "Medusa";
+
+  const medusaTags = medusaData?.data?.product_tags ?? [];
+  const total = isWooSource
+    ? (wooTags?.length ?? 0)
+    : (medusaData?.data?.count ?? 0);
+
+  // Unified tags for display
+  const displayTags = useMemo(() => {
+    if (isWooSource) {
+      return (wooTags ?? []).map((t) => ({
+        id: String(t.id),
+        name: t.name,
+        slug: t.slug,
+        count: t.count,
+      }));
+    }
+    return medusaTags.map((t) => ({
+      id: t.id,
+      name: t.value,
+      slug: t.value.toLowerCase().replace(/\s+/g, "-"),
+      count: 0,
+    }));
+  }, [isWooSource, wooTags, medusaTags]);
 
   const createTag = useCreateTag();
   const updateTag = useUpdateTag();
@@ -119,15 +171,17 @@ export default function TagsPage() {
 
   const stats = useMemo(() => {
     const totalTags = total;
-    const syncedTags = tags.filter(
-      (t) => t.metadata && typeof t.metadata === "object" && "woo_id" in (t.metadata as object)
-    ).length;
+    const syncedTags = isWooSource
+      ? totalTags
+      : medusaTags.filter(
+          (t) => t.metadata && typeof t.metadata === "object" && "woo_id" in (t.metadata as object)
+        ).length;
     return {
       total: totalTags,
       synced: syncedTags,
-      manual: totalTags - syncedTags,
+      manual: isWooSource ? 0 : totalTags - syncedTags,
     };
-  }, [tags, total]);
+  }, [total, isWooSource, medusaTags]);
 
   const handleNameChange = (name: string) => {
     setFormName(name);
@@ -191,7 +245,7 @@ export default function TagsPage() {
           handleDrawerClose();
           refetch();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Cập nhật tag thất bại");
         }
       } else {
         const result = await createTag.mutateAsync({
@@ -206,7 +260,7 @@ export default function TagsPage() {
           handleDrawerClose();
           refetch();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Cập nhật tag thất bại");
         }
       }
     } catch {
@@ -232,7 +286,7 @@ export default function TagsPage() {
         });
         refetch();
       } else {
-        toast.error(`Lỗi: ${result.error}`);
+        toast.error("Lỗi: Cập nhật tag thất bại");
       }
     } catch {
       toast.error("Có lỗi xảy ra");
@@ -274,10 +328,10 @@ export default function TagsPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === tags.length) {
+    if (selectedIds.size === displayTags.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(tags.map((t) => t.id)));
+      setSelectedIds(new Set(displayTags.map((t) => t.id)));
     }
   };
 
@@ -292,7 +346,7 @@ export default function TagsPage() {
             Quản lý thẻ
           </h1>
           <p className="text-muted-foreground">
-            Tạo và quản lý thẻ sản phẩm để phân loại và tìm kiếm dễ dàng hơn.
+            Tạo và quản lý thẻ sản phẩm từ {sourceLabel}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -300,10 +354,20 @@ export default function TagsPage() {
             <RefreshCw className="size-4 mr-2" />
             Làm mới
           </Button>
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="size-4 mr-2" />
-            Thêm thẻ
-          </Button>
+          {!isWooSource && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="size-4 mr-2" />
+              Thêm thẻ
+            </Button>
+          )}
+          {isWooSource && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/settings/app">
+                <Settings className="size-4 mr-2" />
+                Đổi nguồn dữ liệu
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -349,7 +413,7 @@ export default function TagsPage() {
             </div>
             <div>
               <p className="text-2xl font-bold">
-                {tags.length > 0 ? Math.round((stats.synced / stats.total) * 100) : 0}%
+                {total > 0 ? Math.round((stats.synced / stats.total) * 100) : 0}%
               </p>
               <p className="text-sm text-muted-foreground">Tỷ lệ đồng bộ</p>
             </div>
@@ -426,10 +490,13 @@ export default function TagsPage() {
             <div className="flex flex-col items-center justify-center py-16 px-4">
               <AlertCircle className="size-12 text-destructive mb-4" />
               <p className="text-base font-medium text-destructive mb-1">
-                Không thể kết nối Medusa
+                {isWooSource ? "Không thể kết nối WooCommerce" : "Không thể kết nối Medusa"}
               </p>
               <p className="text-sm text-muted-foreground text-center mb-4">
-                {(error as Error)?.message || "Vui lòng kiểm tra cấu hình Medusa."}
+                {(error as Error)?.message ||
+                  (isWooSource
+                    ? "Vui lòng kiểm tra cấu hình WooCommerce trong Cài đặt ứng dụng."
+                    : "Vui lòng kiểm tra cấu hình Medusa.")}
               </p>
               <Button variant="outline" onClick={() => refetch()}>
                 <RefreshCw className="size-4 mr-2" />
@@ -447,7 +514,7 @@ export default function TagsPage() {
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-12">
                         <Checkbox
-                          checked={tags.length > 0 && selectedIds.size === tags.length}
+                          checked={displayTags.length > 0 && selectedIds.size === displayTags.length}
                           onCheckedChange={toggleSelectAll}
                         />
                       </TableHead>
@@ -459,42 +526,21 @@ export default function TagsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tags.length === 0 ? (
+                    {displayTags.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-16">
                           <div className="flex flex-col items-center text-muted-foreground">
                             <Tag className="size-12 mb-3" />
                             <p className="text-base font-medium mb-1">Chưa có thẻ nào</p>
                             <p className="text-sm mb-4">
-                              Bắt đầu bằng cách thêm thẻ đầu tiên cho sản phẩm.
+                              Thẻ được quản lý trong {sourceLabel}.
                             </p>
-                            <Button size="sm" onClick={openCreate}>
-                              <Plus className="size-4 mr-2" />
-                              Thêm thẻ
-                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      tags.map((tag) => {
+                      displayTags.map((tag) => {
                         const isSelected = selectedIds.has(tag.id);
-                        const slug =
-                          (tag.metadata &&
-                          typeof tag.metadata === "object" &&
-                          "slug" in (tag.metadata as object))
-                            ? String((tag.metadata as Record<string, unknown>).slug || "")
-                            : generateSlug(tag.value);
-                        const description =
-                          (tag.metadata &&
-                          typeof tag.metadata === "object" &&
-                          "description" in (tag.metadata as object))
-                            ? String((tag.metadata as Record<string, unknown>).description || "")
-                            : "";
-                        const isWoo =
-                          tag.metadata &&
-                          typeof tag.metadata === "object" &&
-                          "woo_id" in (tag.metadata as object);
-
                         return (
                           <TableRow
                             key={tag.id}
@@ -507,43 +553,58 @@ export default function TagsPage() {
                               />
                             </TableCell>
                             <TableCell>
-                              <div className="font-medium">{tag.value}</div>
+                              <div className="font-medium">{tag.name}</div>
                             </TableCell>
                             <TableCell className="hidden lg:table-cell">
                               <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                {slug || "—"}
+                                {tag.slug || "—"}
                               </code>
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
-                              <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
-                                {description || "—"}
+                              <span className="text-sm text-muted-foreground">
+                                {isWooSource ? (
+                                  tag.count > 0 ? `${tag.count} sản phẩm` : "—"
+                                ) : "—"}
                               </span>
                             </TableCell>
                             <TableCell className="hidden xl:table-cell">
-                              <span className="text-sm text-muted-foreground">
-                                {formatDate(tag.created_at)}
-                              </span>
+                              <span className="text-sm text-muted-foreground">—</span>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                  onClick={() => openEdit(tag)}
-                                  title="Sửa"
-                                >
-                                  <Pencil className="size-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8 text-destructive hover:text-destructive"
-                                  onClick={() => openDelete(tag)}
-                                  title="Xoá"
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
+                                {!isWooSource && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-8"
+                                      onClick={() => {
+                                        const medusaTag = medusaTags.find((t) => t.id === tag.id);
+                                        if (medusaTag) openEdit(medusaTag);
+                                      }}
+                                      title="Sửa"
+                                    >
+                                      <Pencil className="size-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-8 text-destructive hover:text-destructive"
+                                      onClick={() => {
+                                        const medusaTag = medusaTags.find((t) => t.id === tag.id);
+                                        if (medusaTag) openDelete(medusaTag);
+                                      }}
+                                      title="Xoá"
+                                    >
+                                      <Trash2 className="size-4" />
+                                    </Button>
+                                  </>
+                                )}
+                                {isWooSource && (
+                                  <span className="text-xs text-muted-foreground px-2">
+                                    Chỉ xem
+                                  </span>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -558,7 +619,7 @@ export default function TagsPage() {
               {!isLoading && (
                 <div className="flex items-center justify-between px-4 py-3 border-t">
                   <p className="text-sm text-muted-foreground">
-                    Hiển thị {tags.length} / {total} thẻ
+                    Hiển thị {displayTags.length} / {total} thẻ
                     {selectedIds.size > 0 && ` • Đã chọn ${selectedIds.size} thẻ`}
                   </p>
                 </div>

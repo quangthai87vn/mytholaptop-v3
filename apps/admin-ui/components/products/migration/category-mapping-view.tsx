@@ -119,7 +119,7 @@ export function CategoryMappingView({ categories, idMapping, onRefresh, classNam
         setImportResult(null);
       }, 1500);
     } else {
-      setImportResult({ success: false, message: result.error || "Import thất bại" });
+      setImportResult({ success: false, message: (result.error as string) || "Import thất bại" });
     }
   }, [importJson, reloadMappings]);
 

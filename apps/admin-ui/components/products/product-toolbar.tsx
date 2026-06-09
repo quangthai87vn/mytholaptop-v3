@@ -20,6 +20,7 @@ import type { CategoryNode } from "@/components/categories/category-tree";
 import type { StockStatus, ProductStatus, SortOption } from "@/lib/products/product-filters";
 
 interface ProductToolbarProps {
+  source?: "medusa" | "woocommerce";
   search: string;
   onSearchChange: (value: string) => void;
   categoryId: string;
@@ -44,6 +45,7 @@ interface ProductToolbarProps {
 }
 
 export function ProductToolbar({
+  source = "woocommerce",
   search,
   onSearchChange,
   categoryId,
@@ -66,6 +68,7 @@ export function ProductToolbar({
   filterLabels,
   onClearFilters,
 }: ProductToolbarProps) {
+  const isWooSource = source === "woocommerce";
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   return (
@@ -102,9 +105,12 @@ export function ProductToolbar({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                <SelectItem value="published">Hoạt động</SelectItem>
-                <SelectItem value="draft">Nháp</SelectItem>
-                <SelectItem value="proposed">Đề xuất</SelectItem>
+                <SelectItem value="published">{isWooSource ? "Hoạt động" : "Hoạt động"}</SelectItem>
+                <SelectItem value="draft">{isWooSource ? "Bản nháp" : "Nháp"}</SelectItem>
+                {isWooSource && <SelectItem value="pending">Chờ duyệt</SelectItem>}
+                {isWooSource && <SelectItem value="private">Riêng tư</SelectItem>}
+                {!isWooSource && <SelectItem value="proposed">Đề xuất</SelectItem>}
+                {!isWooSource && <SelectItem value="archived">Lưu trữ</SelectItem>}
               </SelectContent>
             </Select>
 
@@ -239,12 +245,15 @@ export function ProductToolbar({
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Chọn trạng thái" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                    <SelectItem value="published">Hoạt động</SelectItem>
-                    <SelectItem value="draft">Nháp</SelectItem>
-                    <SelectItem value="proposed">Đề xuất</SelectItem>
-                  </SelectContent>
+              <SelectContent>
+                <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                <SelectItem value="published">{isWooSource ? "Hoạt động" : "Hoạt động"}</SelectItem>
+                <SelectItem value="draft">{isWooSource ? "Bản nháp" : "Nháp"}</SelectItem>
+                {isWooSource && <SelectItem value="pending">Chờ duyệt</SelectItem>}
+                {isWooSource && <SelectItem value="private">Riêng tư</SelectItem>}
+                {!isWooSource && <SelectItem value="proposed">Đề xuất</SelectItem>}
+                {!isWooSource && <SelectItem value="archived">Lưu trữ</SelectItem>}
+              </SelectContent>
                 </Select>
               </div>
 

@@ -103,16 +103,16 @@ export default function SyncPage() {
       setWooKey(s.wooConsumerKey);
       setWooSecret(s.wooConsumerSecret);
       setMedusaUrl(s.medusaBackendUrl || "http://localhost:9000");
-      setMedusaKey(s.medusaAdminKey || "");
-      setMedusaEmail(s.medusaAdminEmail || "");
-      setMedusaPassword(s.medusaAdminPassword || "");
+      // medusaKey, medusaEmail, medusaPassword are server-side only (P4.2)
+      // Proxy /api/medusa auto-loads credentials from DB — frontend does not need them
+      setMedusaKey("");
+      setMedusaEmail("");
+      setMedusaPassword("");
 
       const hasWooConfig =
         s.wordpressUrl && s.wooConsumerKey && s.wooConsumerSecret;
-      const hasMedusaConfig =
-        s.medusaBackendUrl &&
-        (s.medusaAdminKey ||
-          (s.medusaAdminEmail && s.medusaAdminPassword));
+      // P4.2: Medusa backendUrl is sufficient — credentials auto-loaded by proxy from DB
+      const hasMedusaConfig = Boolean(s.medusaBackendUrl);
       setIsConfigured(Boolean(hasWooConfig && hasMedusaConfig));
       setIsCheckingConfig(false);
     });

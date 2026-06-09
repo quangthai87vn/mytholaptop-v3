@@ -5,34 +5,31 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
+import { getAppSetting } from "@/lib/content/db/app-settings";
+import { requireAdminAuth } from "@/lib/auth/require-admin";
 
 async function getMedusaConfig() {
   try {
-    const settingsPath = path.join(process.cwd(), "data", "settings.json");
-    const raw = await fs.readFile(settingsPath, "utf-8");
-    const settings = JSON.parse(raw);
+    const medusa = await getAppSetting("medusa");
+    if (!medusa) return null;
+    const m = medusa as Record<string, string>;
+    const isJwt = (key: string) => key.startsWith("eyJ") && key.split(".").length === 3;
+    const storedJwt = (m.adminApiKey && isJwt(m.adminApiKey))
+      ? m.adminApiKey
+      : (m.adminPassword && isJwt(m.adminPassword) ? m.adminPassword : undefined);
     return {
-      url: settings.medusa?.backendUrl || settings.medusa?.url || "http://localhost:9000",
-      jwtToken: settings.medusa?.adminApiKey?.startsWith("eyJ")
-        ? settings.medusa.adminApiKey
-        : undefined,
-      email: settings.medusa?.adminEmail || "",
-      password: settings.medusa?.adminPassword || "",
+      url: m.backendUrl || "http://localhost:9000",
+      jwtToken: storedJwt,
+      email: m.adminEmail || "",
+      password: m.adminPassword || "",
     };
   } catch (err) {
-    console.error("[Medusa Products] Cannot read settings.json:", err);
-    return {
-      url: "http://localhost:9000",
-      jwtToken: undefined,
-      email: "",
-      password: "",
-    };
+    console.error("[Medusa Products] Cannot load medusa settings from DB:", err);
+    return null;
   }
 }
 
-async function authenticateWithMedusa(url: string, email: string, password: string) {
+async function authenticateWithMedusa(url: string | null | undefined, email: string | null | undefined, password: string | null | undefined): Promise<string | undefined> {
   const authEndpoints = [
     "/admin/auth/user/emailpass",
     "/auth/user/emailpass",
@@ -41,7 +38,7 @@ async function authenticateWithMedusa(url: string, email: string, password: stri
 
   for (const authPath of authEndpoints) {
     try {
-      const fullUrl = `${url.replace(/\/$/, "")}${authPath}`;
+      const fullUrl = `${(url || "").replace(/\/$/, "")}${authPath}`;
       const response = await fetch(fullUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -65,23 +62,33 @@ async function authenticateWithMedusa(url: string, email: string, password: stri
       console.warn(`[Medusa Products] Auth attempt ${authPath} failed:`, err);
     }
   }
-  return null;
+  return undefined;
 }
 
 export async function GET(req: NextRequest) {
+  const authError = await requireAdminAuth(req);
+  if (authError) return authError;
+
   try {
     const { searchParams } = req.nextUrl;
     const limit = searchParams.get("limit") || "20";
     const offset = searchParams.get("offset") || "0";
     const q = searchParams.get("q") || "";
 
-    const { url, jwtToken, email, password } = await getMedusaConfig();
+    const config = await getMedusaConfig();
+    if (!config) {
+      return NextResponse.json(
+        { error: "Chưa cấu hình Medusa. Vui lòng cấu hình Medusa trong Settings." },
+        { status: 401 }
+      );
+    }
+    const { url, jwtToken, email, password } = config;
     console.log(`[Medusa Products] Config loaded — url=${url}, hasJwt=${!!jwtToken}, hasCreds=${!!(email && password)}`);
 
     let authToken = jwtToken;
 
     if (!authToken && email && password) {
-      authToken = await authenticateWithMedusa(url, email, password);
+      authToken = await authenticateWithMedusa(url!, email!, password!);
     }
 
     if (!authToken) {

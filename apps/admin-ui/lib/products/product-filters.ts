@@ -77,10 +77,16 @@ export function resolveImageUrlForDisplay(url: string | undefined | null): strin
 
 export interface AdaptedProduct {
   id: string;
+  /** 'medusa' | 'woocommerce' */
+  source: "medusa" | "woocommerce";
+  /** Original source-specific ID (WooCommerce product ID or Medusa product ID) */
+  sourceId: string;
   name: string;
   sku: string;
   category: string;
   categoryId?: string;
+  /** All WooCommerce category IDs for this product (for filtering/display) */
+  categoryIds?: string[];
   price: number;
   compareAtPrice?: number;
   stock: number;
@@ -90,11 +96,173 @@ export interface AdaptedProduct {
   tags: string[];
   description?: string;
   metadata?: Record<string, string>;
-  rawProduct: MedusaProduct;
+  rawProduct?: MedusaProduct;
   /** ISO date string from Medusa created_at */
   createdAt?: string;
   /** Sync status derived from metadata */
   syncStatus?: "synced" | "pending" | "failed" | "manual";
+}
+
+/** WooCommerce REST API product (full) */
+export interface WooProduct {
+  id: number;
+  name: string;
+  slug: string;
+  status: string;
+  featured: boolean;
+  description: string;
+  short_description: string;
+  price: string;
+  regular_price: string;
+  sale_price: string;
+  on_sale: boolean;
+  total_sales: string;
+  stock_quantity: number | null;
+  stock_status: string;
+  manage_stock: boolean;
+  backorders: string;
+  sold_individually: boolean;
+  weight: string;
+  dimensions: {
+    length: string;
+    width: string;
+    height: string;
+  };
+  reviews_allowed: boolean;
+  categories: Array<{ id: number; name: string; slug: string; parent?: number }>;
+  tags: Array<{ id: number; name: string; slug: string }>;
+  images: Array<{ id: number; src: string; name: string; alt: string; date_created: string }>;
+  sku: string;
+  permalink: string;
+  date_created: string;
+  date_created_gmt: string;
+  date_modified: string;
+  date_modified_gmt: string;
+  type: string;
+  variated: boolean;
+  variations: number[];
+  default_attributes: Array<{ id: number; name: string; option: string }>;
+  metadata?: Record<string, string>;
+}
+
+/** WooCommerce REST API category */
+export interface WooCategory {
+  id: number;
+  name: string;
+  slug: string;
+  parent: number;
+  description: string;
+  count: number;
+  image: { id: number; src: string; name: string; alt: string } | null;
+  review_count: number;
+  permalink: string;
+  date_created: string;
+  date_created_gmt: string;
+  date_modified: string;
+  date_modified_gmt: string;
+  metadata?: Record<string, string>;
+}
+
+/** Adapt a raw WooCommerce category to CategoryNode shape */
+export function adaptWooCategory(cat: WooCategory): CategoryNode {
+  return {
+    id: String(cat.id),
+    name: cat.name,
+    handle: cat.slug || "",
+    description: cat.description || "",
+    is_active: true, // WooCommerce categories don't have active/inactive
+    parent_category_id: cat.parent ? String(cat.parent) : "",
+    level: 0,
+    children: [],
+    wooId: String(cat.id),
+  };
+}
+
+/** Adapt a raw WooCommerce product to the unified AdaptedProduct shape */
+export function adaptWooProduct(
+  p: WooProduct,
+  categoryMap?: Map<string, { name: string; parent: number }>
+): AdaptedProduct {
+  const price = parseFloat(p.price || p.regular_price || "0");
+  const regularPrice = parseFloat(p.regular_price || "0");
+  const salePrice = parseFloat(p.sale_price || "0");
+
+  const image = p.images?.[0]?.src || "";
+
+  const stockStatus: StockStatus =
+    p.stock_status === "instock" ? "instock"
+    : p.stock_status === "outofstock" ? "outofstock"
+    : p.stock_status === "onbackorder" ? "onbackorder"
+    : "unknown";
+
+  const status = p.status === "publish" ? "published"
+    : p.status === "pending" ? "pending"
+    : p.status === "draft" ? "draft"
+    : p.status === "private" ? "private"
+    : p.status;
+
+  const meta: Record<string, string> = {};
+  if (p.metadata) {
+    Object.entries(p.metadata).forEach(([k, v]) => { meta[k] = String(v); });
+  }
+  if (p.manage_stock) meta.manage_stock = "true";
+
+  // Build category display: "Parent / Child" when parent info is available
+  const wooCats = p.categories || [];
+  let category = "";
+  let categoryId: string | undefined;
+  const categoryIds: string[] = wooCats.map((c) => String(c.id));
+
+  if (wooCats.length > 0 && categoryMap) {
+    // Sort so parent comes before child
+    const sortedCats = [...wooCats].sort((a, b) => a.id - b.id);
+    const parentCat = sortedCats.find((c) => c.parent === 0);
+    const childCat = sortedCats.find((c) => c.parent !== 0 && parentCat && c.parent === parentCat.id);
+    if (childCat && parentCat) {
+      category = `${parentCat.name} / ${childCat.name}`;
+      categoryId = String(childCat.id);
+    } else if (parentCat) {
+      category = parentCat.name;
+      categoryId = String(parentCat.id);
+    } else {
+      category = wooCats[0].name;
+      categoryId = String(wooCats[0].id);
+    }
+  } else if (wooCats.length > 0) {
+    // No categoryMap: use the first category with parent info if present
+    const sortedCats = [...wooCats].sort((a, b) => a.id - b.id);
+    const parentCat = sortedCats.find((c) => c.parent === 0);
+    const childCat = sortedCats.find((c) => c.parent !== 0);
+    if (childCat && parentCat) {
+      category = `${parentCat.name} / ${childCat.name}`;
+    } else {
+      category = wooCats[0].name;
+    }
+    categoryId = String(wooCats[0].id);
+  }
+
+  return {
+    id: String(p.id),
+    source: "woocommerce" as const,
+    sourceId: String(p.id),
+    name: p.name || "Không có tên",
+    sku: p.sku || "",
+    category,
+    categoryId,
+    categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
+    price,
+    compareAtPrice: salePrice > 0 && salePrice < regularPrice ? regularPrice : undefined,
+    stock: p.stock_quantity ?? 0,
+    stockStatus,
+    status,
+    image,
+    tags: p.tags?.map((t) => t.name) || [],
+    description: p.short_description || p.description,
+    metadata: meta,
+    rawProduct: {} as MedusaProduct,
+    createdAt: p.date_created || undefined,
+    syncStatus: "manual",
+  };
 }
 
 export interface ProductFilters {
@@ -121,13 +289,36 @@ export const MEDUSA_STATUS_LABELS: Record<string, string> = {
   all: "Tất cả",
 };
 
+export const WOO_STATUS_LABELS: Record<string, string> = {
+  publish: "Hoạt động",
+  draft: "Bản nháp",
+  pending: "Chờ duyệt",
+  private: "Riêng tư",
+  all: "Tất cả",
+};
+
+export function getSourceStatusLabel(
+  status: string,
+  source: "woocommerce" | "medusa"
+): string {
+  if (source === "woocommerce") {
+    return WOO_STATUS_LABELS[status] || status;
+  }
+  return MEDUSA_STATUS_LABELS[status] || status;
+}
+
+export function getSourceStockLabel(
+  stockStatus: StockStatus
+): string {
+  return STOCK_STATUS_LABELS[stockStatus] || stockStatus;
+}
+
 export function getStockBadgeVariant(
   stock: number,
   stockStatus: StockStatus
 ): "success" | "warning" | "destructive" {
-  if (stock === 0) return "destructive";
-  if (stockStatus === "outofstock") return "destructive";
   if (stockStatus === "onbackorder") return "warning";
+  if (stockStatus === "outofstock" || stock === 0) return "destructive";
   if (stock <= 3) return "warning";
   return "success";
 }
@@ -136,6 +327,7 @@ export function getStatusVariant(
   status: string
 ): "success" | "secondary" | "outline" {
   if (status === "published") return "success";
+  if (status === "publish") return "success";
   if (status === "draft") return "secondary";
   return "outline";
 }
@@ -273,6 +465,8 @@ export function adaptProduct(
 
   return {
     id: p.id,
+    source: "medusa" as const,
+    sourceId: p.id,
     name: p.title,
     sku: firstVariant?.sku || "",
     category: categoryName,
@@ -314,6 +508,7 @@ export function filterProductsByCategory(
   if (!categoryId || categoryId === "all") return products;
   return products.filter((p) => {
     if (p.categoryId === categoryId) return true;
+    if (p.categoryIds && p.categoryIds.includes(categoryId)) return true;
     const meta = p.metadata;
     if (meta?.wordpress_category_ids) {
       const ids = meta.wordpress_category_ids.split(",").map((s) => s.trim());
@@ -346,6 +541,9 @@ export function filterProductsByCategoryTree(
   return products.filter((p) => {
     if (p.categoryId === categoryId) return true;
     if (categoryDescendants.has(p.categoryId || "")) return true;
+
+    // Also check categoryIds array (WooCommerce products)
+    if (p.categoryIds && p.categoryIds.includes(categoryId)) return true;
 
     const meta = p.metadata;
     const wooCatIds = meta?.wordpress_category_ids

@@ -35,22 +35,19 @@ export interface ApiResponse<T> {
 
 /**
  * Gọi API WooCommerce qua Next.js proxy để tránh CORS.
+ * P5.4 Security: Credentials được load server-side từ DB.
+ * Frontend KHÔNG gửi consumer_key/consumer_secret trong URL.
  */
 async function wooCommerceRequest<T>(
   endpoint: string,
-  config: WooCommerceConfig,
+  _config: WooCommerceConfig,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
-    // Sử dụng proxy API route để tránh CORS
     const proxyUrl = `/api/woo${endpoint}`;
-    const url = new URL(proxyUrl, window.location.origin);
 
-    url.searchParams.set("baseUrl", config.wordpressUrl);
-    url.searchParams.set("consumerKey", config.consumerKey);
-    url.searchParams.set("consumerSecret", config.consumerSecret);
-
-    const response = await fetch(url.toString(), {
+    // P5.4: Credentials loaded server-side from DB — no query params needed
+    const response = await fetch(proxyUrl, {
       ...options,
       method: options.method || "GET",
       headers: {

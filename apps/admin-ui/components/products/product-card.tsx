@@ -27,18 +27,18 @@ import { formatCurrency, cn } from "@/lib/utils";
 import {
   getStockBadgeVariant,
   getStatusVariant,
-  getSyncStatusVariant,
   SYNC_STATUS_LABELS,
-  type AdaptedProduct,
-} from "@/lib/products/product-filters";
-import {
   STOCK_STATUS_LABELS,
   MEDUSA_STATUS_LABELS,
+  WOO_STATUS_LABELS,
+  getSourceStatusLabel,
+  type AdaptedProduct,
 } from "@/lib/products/product-filters";
 
 interface ProductCardProps {
   product: AdaptedProduct;
   selected: boolean;
+  activeSource?: "woocommerce" | "medusa";
   onToggleSelect: (id: string) => void;
   onView: (product: AdaptedProduct) => void;
   onEdit: (product: AdaptedProduct) => void;
@@ -49,6 +49,7 @@ interface ProductCardProps {
 export function ProductCard({
   product,
   selected,
+  activeSource,
   onToggleSelect,
   onView,
   onEdit,
@@ -56,8 +57,14 @@ export function ProductCard({
   onSync,
 }: ProductCardProps) {
   const router = useRouter();
-  const isOutOfStock =
-    product.stockStatus === "outofstock" || product.stock === 0;
+  // Only outofstock gets grayscale; onbackorder shows normally
+  const isOutOfStock = product.stockStatus === "outofstock";
+
+  // Source-aware status label
+  const statusLabel = getSourceStatusLabel(
+    product.status,
+    product.source || activeSource || "medusa"
+  );
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -127,29 +134,26 @@ export function ProductCard({
       </div>
 
       {/* Info */}
-      <CardContent className="p-3 flex flex-col flex-1 min-w-0">
-        {/* Category badge */}
+      <CardContent className="p-3 flex flex-col flex-1 min-w-0 gap-1">
+        {/* Category — single line, centered */}
         {product.category && (
-          <p className="text-xs text-primary font-medium bg-primary/5 px-1.5 py-0.5 rounded truncate mb-1">
+          <p className="text-xs text-primary font-medium text-center truncate" title={product.category}>
             {product.category}
           </p>
         )}
 
-        {/* Product name */}
+        {/* Product name — centered */}
         <h3
-          className="line-clamp-2 text-sm font-semibold leading-snug text-foreground cursor-pointer hover:text-primary transition-colors"
+          className="line-clamp-2 text-sm font-semibold leading-snug text-foreground cursor-pointer hover:text-primary transition-colors text-center"
           onClick={() => onView(product)}
         >
           {product.name}
         </h3>
 
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Price */}
-        <div className="h-12 flex flex-col justify-end">
+        {/* Price — centered and prominent */}
+        <div className="mt-auto">
           {product.price > 0 ? (
-            <div className="flex flex-col">
+            <div className="flex flex-col items-center">
               <span className="text-base font-bold text-primary">
                 {formatCurrency(product.price)}
               </span>
@@ -161,29 +165,18 @@ export function ProductCard({
                 )}
             </div>
           ) : (
-            <span className="text-xs text-muted-foreground">Chưa có giá</span>
+            <p className="text-xs text-muted-foreground text-center">Chưa có giá</p>
           )}
-        </div>
 
-        {/* SKU + Tags row */}
-        <div className="flex items-center justify-between mt-1.5 min-w-0">
-          <span className="text-xs text-muted-foreground truncate font-mono max-w-[55%]">
+          {/* SKU */}
+          <p className="text-xs text-muted-foreground text-center truncate font-mono mt-0.5" title={product.sku || undefined}>
             {product.sku || "—"}
-          </span>
-          {/* Sync status badge */}
-          {product.syncStatus && product.syncStatus !== "manual" && (
-            <Badge
-              variant={getSyncStatusVariant(product.syncStatus)}
-              className="text-[9px] px-1 py-0 shrink-0"
-            >
-              {SYNC_STATUS_LABELS[product.syncStatus]}
-            </Badge>
-          )}
+          </p>
         </div>
 
-        {/* Tags */}
+        {/* Tags — compact */}
         {product.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
+          <div className="flex flex-wrap gap-1 justify-center">
             {product.tags.slice(0, 2).map((tag, i) => (
               <Badge
                 key={i}
@@ -202,7 +195,7 @@ export function ProductCard({
         )}
 
         {/* Bottom row — status badges + action menu */}
-        <div className="flex items-center justify-between pt-2 mt-2 border-t min-w-0">
+        <div className="flex items-center justify-between pt-1.5 mt-1 border-t min-w-0">
           <div className="flex items-center gap-1 min-w-0">
             <Badge
               variant={getStockBadgeVariant(product.stock, product.stockStatus)}
@@ -216,7 +209,7 @@ export function ProductCard({
               variant={getStatusVariant(product.status)}
               className="text-[10px] px-1.5 py-0 shrink-0"
             >
-              {MEDUSA_STATUS_LABELS[product.status] || product.status}
+              {statusLabel}
             </Badge>
           </div>
 
@@ -241,13 +234,15 @@ export function ProductCard({
                 <Pencil className="mr-2 size-3" />
                 Sửa
               </DropdownMenuItem>
-              <DropdownMenuItem
-                className="cursor-pointer"
-                onClick={() => router.push(`/products/${product.id}/edit`)}
-              >
-                <Pencil className="mr-2 size-3" />
-                Sửa nâng cao
-              </DropdownMenuItem>
+              {activeSource !== "woocommerce" && (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/products/${product.id}/edit`)}
+                >
+                  <Pencil className="mr-2 size-3" />
+                  Sửa nâng cao
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 className="cursor-pointer"
                 onClick={() => onSync(product.id)}

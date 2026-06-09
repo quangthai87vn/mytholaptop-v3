@@ -220,7 +220,7 @@ export function ProductFormDialog({
           onOpenChange(false);
           onSuccess?.();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Tạo sản phẩm thất bại");
         }
       } else {
         const result = await createProduct.mutateAsync(payload);
@@ -229,7 +229,7 @@ export function ProductFormDialog({
           onOpenChange(false);
           onSuccess?.();
         } else {
-          toast.error(`Lỗi: ${result.error}`);
+          toast.error("Lỗi: Tạo sản phẩm thất bại");
         }
       }
     } catch {

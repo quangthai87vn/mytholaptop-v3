@@ -27,13 +27,14 @@ import {
   getSyncStatusVariant,
   SYNC_STATUS_LABELS,
   STOCK_STATUS_LABELS,
-  MEDUSA_STATUS_LABELS,
+  getSourceStatusLabel,
   type AdaptedProduct,
 } from "@/lib/products/product-filters";
 
 interface ProductsTableProps {
   products: AdaptedProduct[];
   selectedIds: Set<string>;
+  activeSource?: "woocommerce" | "medusa";
   onToggleSelect: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
   onView: (product: AdaptedProduct) => void;
@@ -45,6 +46,7 @@ interface ProductsTableProps {
 export function ProductsTable({
   products,
   selectedIds,
+  activeSource,
   onToggleSelect,
   onSelectAll,
   onView,
@@ -52,6 +54,7 @@ export function ProductsTable({
   onDelete,
   onSync,
 }: ProductsTableProps) {
+  const router = useRouter();
   const allSelected =
     products.length > 0 && products.every((p) => selectedIds.has(p.id));
 
@@ -243,7 +246,10 @@ export function ProductsTable({
                     variant={getStatusVariant(product.status)}
                     className="text-[10px] px-1.5 py-0"
                   >
-                    {MEDUSA_STATUS_LABELS[product.status] || product.status}
+                    {getSourceStatusLabel(
+                      product.status,
+                      product.source || activeSource || "medusa"
+                    )}
                   </Badge>
                 </td>
 
@@ -279,24 +285,24 @@ export function ProductsTable({
                         onClick={() => onView(product)}
                       >
                         <Eye className="mr-2 size-3" />
-                        Xem
+                        Xem chi tiết
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="cursor-pointer"
                         onClick={() => onEdit(product)}
                       >
                         <Pencil className="mr-2 size-3" />
-                        Sửa nhanh
+                        Sửa sản phẩm
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="cursor-pointer"
-                        onClick={() =>
-                          onEdit(product)
-                        }
-                      >
-                        <Pencil className="mr-2 size-3" />
-                        Sửa nâng cao
-                      </DropdownMenuItem>
+                      {activeSource !== "woocommerce" && (
+                        <DropdownMenuItem
+                          className="cursor-pointer"
+                          onClick={() => router.push(`/products/${product.id}/edit`)}
+                        >
+                          <Pencil className="mr-2 size-3" />
+                          Sửa nâng cao
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         className="cursor-pointer"
                         onClick={() => onSync(product.id)}
