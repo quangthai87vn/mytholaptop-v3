@@ -89,7 +89,7 @@ export function InternsClient({ interns, rankings }: InternsClientProps) {
                   <div>
                     <div className="font-semibold text-sm text-slate-900">{intern.full_name}</div>
                     <div className="text-xs text-slate-500">
-                      {ranking.overall_score.toFixed(1)} điểm
+                      {Number(ranking.overall_score).toFixed(1)} điểm
                     </div>
                   </div>
                 </div>

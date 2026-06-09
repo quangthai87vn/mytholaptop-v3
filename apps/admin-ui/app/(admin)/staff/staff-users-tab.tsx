@@ -1,6 +1,11 @@
+/**
+ * Reusable Staff Users Tab Content
+ * Tách ra khỏi page.tsx để dùng trong /settings/users tabs
+ */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   Search,
   MoreHorizontal,
@@ -11,8 +16,9 @@ import {
   Loader2,
   AlertCircle,
   Mail,
+  UserRound,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -78,82 +84,6 @@ interface StaffListResponse {
   pages: number;
 }
 
-interface StaffFiltersProps {
-  search: string;
-  onSearchChange: (v: string) => void;
-  role: string;
-  onRoleChange: (v: string) => void;
-  status: string;
-  onStatusChange: (v: string) => void;
-  onClearFilters: () => void;
-}
-
-function StaffFilters({
-  search,
-  onSearchChange,
-  role,
-  onRoleChange,
-  status,
-  onStatusChange,
-  onClearFilters,
-}: StaffFiltersProps) {
-  const hasActiveFilters = search || role !== "all" || status !== "all";
-
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Tìm kiếm tên, email..."
-              className="pl-9 h-10"
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-          </div>
-          <Select value={role} onValueChange={onRoleChange}>
-            <SelectTrigger className="w-full sm:w-40 h-10">
-              <SelectValue placeholder="Vai trò" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả vai trò</SelectItem>
-              <SelectItem value="super_admin">Super Admin</SelectItem>
-              <SelectItem value="admin">Quản trị viên</SelectItem>
-              <SelectItem value="editor">Biên tập viên</SelectItem>
-              <SelectItem value="viewer">Người xem</SelectItem>
-              <SelectItem value="intern">Thực tập sinh</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={status} onValueChange={onStatusChange}>
-            <SelectTrigger className="w-full sm:w-36 h-10">
-              <SelectValue placeholder="Trạng thái" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="active">Hoạt động</SelectItem>
-              <SelectItem value="inactive">Tắt</SelectItem>
-            </SelectContent>
-          </Select>
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-10 px-3">
-              Xoá lọc
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-const getInitials = (name: string) =>
-  name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-
-const getStatusBadge = (status: string) =>
-  status === "active"
-    ? <Badge variant="success">Hoạt động</Badge>
-    : <Badge variant="secondary">Tắt</Badge>;
-
 // ─── Create Dialog ────────────────────────────────────────────────────────────
 
 interface CreateFormData {
@@ -199,7 +129,6 @@ function CreateUserDialog({
     setLoading(true);
     setError(null);
 
-    // Client-side validation
     if (form.password.length < 8) {
       setError("Mật khẩu phải có ít nhất 8 ký tự.");
       setLoading(false);
@@ -250,6 +179,8 @@ function CreateUserDialog({
       setLoading(false);
     }
   };
+
+  if (!open) return null;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -600,9 +531,214 @@ function DeleteUserDialog({
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────
+// ─── Staff Table Component ───────────────────────────────────────────────────
 
-export default function StaffPage() {
+function StaffTable({
+  staff,
+  total,
+  loading,
+  loadError,
+  onRetry,
+  onFetch,
+  page,
+  totalPages,
+  currentUser,
+  onCreateOpen,
+  onEditMember,
+  onDeleteMember,
+  canCreate,
+}: {
+  staff: StaffMember[];
+  total: number;
+  loading: boolean;
+  loadError: string | null;
+  onRetry: () => void;
+  onFetch: (pg: number) => void;
+  page: number;
+  totalPages: number;
+  currentUser: { id: string; role: string } | null;
+  onCreateOpen: () => void;
+  onEditMember: (m: StaffMember) => void;
+  onDeleteMember: (m: StaffMember) => void;
+  canCreate: boolean;
+}) {
+  const getInitials = (name: string) =>
+    name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const getStatusBadge = (status: string) =>
+    status === "active"
+      ? <Badge variant="success">Hoạt động</Badge>
+      : <Badge variant="secondary">Tắt</Badge>;
+
+  if (loadError) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-10 gap-3">
+          <AlertCircle className="size-8 text-destructive" />
+          <p className="text-destructive font-medium">{loadError}</p>
+          <Button variant="outline" onClick={onRetry}>Thử lại</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <Loader2 className="size-8 animate-spin text-muted-foreground mb-3" />
+          <p className="text-muted-foreground">Đang tải danh sách...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (staff.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <AlertCircle className="size-10 text-muted-foreground mb-3" />
+          <p className="text-base font-medium text-muted-foreground">
+            Không tìm thấy nhân viên nào.
+          </p>
+          {canCreate && (
+            <Button variant="outline" className="mt-4" onClick={onCreateOpen}>
+              Tạo tài khoản đầu tiên
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <p className="text-sm text-muted-foreground">
+        {staff.length} / {total} nhân viên
+      </p>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nhân viên</TableHead>
+                <TableHead>Vai trò</TableHead>
+                <TableHead className="hidden sm:table-cell">Trạng thái</TableHead>
+                <TableHead className="hidden sm:table-cell">Đăng nhập cuối</TableHead>
+                <TableHead className="hidden sm:table-cell">Ngày tạo</TableHead>
+                <TableHead className="w-12" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {staff.map((member) => {
+                const showMenu = canViewActionMenu(
+                  currentUser?.role || "",
+                  currentUser?.id || "",
+                  member.id,
+                  member.role
+                );
+                const isMe = currentUser?.id === member.id;
+
+                return (
+                  <TableRow key={member.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="size-9">
+                          <AvatarFallback className="text-xs">
+                            {getInitials(member.full_name || member.email)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{member.full_name || "—"}</p>
+                            {isMe && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                (Bạn)
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Mail className="size-3" />
+                            {member.email}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={ROLE_BADGE_COLORS[member.role] || "bg-gray-100 text-gray-700"}>
+                        <Shield className="size-3 mr-1" />
+                        {ROLE_LABELS[member.role] || member.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      {getStatusBadge(member.status)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground hidden sm:table-cell text-sm">
+                      {member.last_login_at
+                        ? new Date(member.last_login_at).toLocaleDateString("vi-VN")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground hidden sm:table-cell text-sm">
+                      {new Date(member.created_at).toLocaleDateString("vi-VN")}
+                    </TableCell>
+                    <TableCell>
+                      {showMenu && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/settings/users/${member.id}`}>
+                                <UserRound className="mr-2 size-4" />
+                                Xem hồ sơ
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onEditMember(member)}>
+                              <Pencil className="mr-2 size-4" />
+                              Chỉnh sửa
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => onDeleteMember(member)}
+                            >
+                              <Trash2 className="mr-2 size-4" />
+                              Vô hiệu hoá
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onFetch(page - 1)}>
+            Trước
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Trang {page} / {totalPages}
+          </span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onFetch(page + 1)}>
+            Sau
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Staff Users Tab (default export) ────────────────────────────────────────
+
+export default function StaffUsersTab() {
   const currentUser = useAuthStore((s) => s.user);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
@@ -614,7 +750,6 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [editMember, setEditMember] = useState<StaffMember | null>(null);
   const [deleteMember, setDeleteMember] = useState<StaffMember | null>(null);
@@ -650,211 +785,75 @@ export default function StaffPage() {
     }
   }, [search, role, status, limit]);
 
-  // Fetch on mount
-  useEffect(() => {
-    fetchStaff(1);
-  }, []);
+  useEffect(() => { fetchStaff(1); }, []);
 
-  // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => fetchStaff(1), 350);
     return () => clearTimeout(timer);
   }, [search, fetchStaff]);
 
-  const handleRoleChange = (v: string) => { setRole(v); fetchStaff(1); };
-  const handleStatusChange = (v: string) => { setStatus(v); fetchStaff(1); };
-  const handleClearFilters = () => { setSearch(""); setRole("all"); setStatus("all"); fetchStaff(1); };
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-4">
+      {/* Filters + Create */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Nhân viên & Phân quyền
-          </h1>
-          <p className="text-muted-foreground">
-            Quản lý tài khoản nhân viên và phân quyền truy cập.
-          </p>
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Tìm kiếm tên, email..."
+            className="pl-9 h-10"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-        {canCreate && (
-          <Button onClick={() => setCreateOpen(true)} className="gap-2">
-            <UserPlus className="size-4" />
-            Tạo tài khoản
-          </Button>
-        )}
+        <div className="flex gap-2 flex-wrap">
+          <Select value={role} onValueChange={(v) => { setRole(v); fetchStaff(1); }}>
+            <SelectTrigger className="w-40 h-10">
+              <SelectValue placeholder="Vai trò" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả vai trò</SelectItem>
+              <SelectItem value="super_admin">Super Admin</SelectItem>
+              <SelectItem value="admin">Quản trị viên</SelectItem>
+              <SelectItem value="editor">Biên tập viên</SelectItem>
+              <SelectItem value="viewer">Người xem</SelectItem>
+              <SelectItem value="intern">Thực tập sinh</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={status} onValueChange={(v) => { setStatus(v); fetchStaff(1); }}>
+            <SelectTrigger className="w-36 h-10">
+              <SelectValue placeholder="Trạng thái" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="active">Hoạt động</SelectItem>
+              <SelectItem value="inactive">Tắt</SelectItem>
+            </SelectContent>
+          </Select>
+          {canCreate && (
+            <Button onClick={() => setCreateOpen(true)} className="gap-2">
+              <UserPlus className="size-4" />
+              Tạo tài khoản
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Filters */}
-      <StaffFilters
-        search={search}
-        onSearchChange={setSearch}
-        role={role}
-        onRoleChange={handleRoleChange}
-        status={status}
-        onStatusChange={handleStatusChange}
-        onClearFilters={handleClearFilters}
-      />
-
-      {/* Error state */}
-      {loadError && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-10 gap-3">
-            <AlertCircle className="size-8 text-destructive" />
-            <p className="text-destructive font-medium">{loadError}</p>
-            <Button variant="outline" onClick={() => fetchStaff(page)}>
-              Thử lại
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Loading */}
-      {loading && !loadError && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="size-8 animate-spin text-muted-foreground mb-3" />
-            <p className="text-muted-foreground">Đang tải danh sách...</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Empty */}
-      {!loading && !loadError && staff.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <AlertCircle className="size-10 text-muted-foreground mb-3" />
-            <p className="text-base font-medium text-muted-foreground">
-              Không tìm thấy nhân viên nào.
-            </p>
-            {canCreate && (
-              <Button variant="outline" className="mt-4" onClick={() => setCreateOpen(true)}>
-                Tạo tài khoản đầu tiên
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Table */}
-      {!loading && !loadError && staff.length > 0 && (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {staff.length} / {total} nhân viên
-          </p>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nhân viên</TableHead>
-                    <TableHead>Vai trò</TableHead>
-                    <TableHead className="hidden sm:table-cell">Trạng thái</TableHead>
-                    <TableHead className="hidden sm:table-cell">Đăng nhập cuối</TableHead>
-                    <TableHead className="hidden sm:table-cell">Ngày tạo</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {staff.map((member) => {
-                    const showMenu = canViewActionMenu(
-                      currentUser?.role || "",
-                      currentUser?.id || "",
-                      member.id,
-                      member.role
-                    );
-                    const isMe = currentUser?.id === member.id;
-
-                    return (
-                      <TableRow key={member.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="size-9">
-                              <AvatarFallback className="text-xs">
-                                {getInitials(member.full_name || member.email)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium">{member.full_name || "—"}</p>
-                                {isMe && (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                    (Bạn)
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Mail className="size-3" />
-                                {member.email}
-                              </p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={ROLE_BADGE_COLORS[member.role] || "bg-gray-100 text-gray-700"}>
-                            <Shield className="size-3 mr-1" />
-                            {ROLE_LABELS[member.role] || member.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          {getStatusBadge(member.status)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground hidden sm:table-cell text-sm">
-                          {member.last_login_at
-                            ? new Date(member.last_login_at).toLocaleDateString("vi-VN")
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground hidden sm:table-cell text-sm">
-                          {new Date(member.created_at).toLocaleDateString("vi-VN")}
-                        </TableCell>
-                        <TableCell>
-                          {showMenu && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreHorizontal className="size-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setEditMember(member)}>
-                                  <Pencil className="mr-2 size-4" />
-                                  Chỉnh sửa
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => setDeleteMember(member)}
-                                >
-                                  <Trash2 className="mr-2 size-4" />
-                                  Vô hiệu hoá
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && !loading && !loadError && (
-        <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => fetchStaff(page - 1)}>
-            Trước
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Trang {page} / {totalPages}
-          </span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => fetchStaff(page + 1)}>
-            Sau
-          </Button>
-        </div>
-      )}
+      <StaffTable
+        staff={staff}
+        total={total}
+        loading={loading}
+        loadError={loadError}
+        onRetry={() => fetchStaff(page)}
+        onFetch={fetchStaff}
+        page={page}
+        totalPages={totalPages}
+        currentUser={currentUser}
+        onCreateOpen={() => setCreateOpen(true)}
+        onEditMember={setEditMember}
+        onDeleteMember={setDeleteMember}
+        canCreate={canCreate}
+      />
 
       {/* Dialogs */}
       <CreateUserDialog
