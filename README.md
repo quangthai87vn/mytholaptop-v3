@@ -551,7 +551,9 @@ pnpm dev:backend  # Backend: http://localhost:7003
 ### Docker dev (không cần cài Node)
 
 ```bash
+docker compose -f docker-compose-dev.yml down
 docker compose -f docker-compose-dev.yml up -d
+
 # Admin UI: http://localhost:7004
 # Backend: http://localhost:7003
 # Redis: localhost:6379
