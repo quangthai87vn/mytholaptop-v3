@@ -23,7 +23,7 @@ import * as path from "path";
 import { requireAdminAuth } from "@/lib/auth/require-admin";
 import { requireCsrf } from "@/lib/auth/csrf";
 
-const ADMIN_UI_ROOT = process.cwd();
+const ADMIN_UI_ROOT = process.cwd().replace(/\\/g, "/");
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -148,7 +148,9 @@ function resolveRootDir(uploadRootDir: string): string {
   if (path.isAbsolute(uploadRootDir)) {
     return uploadRootDir;
   }
-  return path.resolve(ADMIN_UI_ROOT, uploadRootDir);
+
+  const normalizedRoot = uploadRootDir.replace(/^\.\//, "").replace(/^\//, "");
+  return `${ADMIN_UI_ROOT}/${normalizedRoot}`.replace(/\/+/g, "/");
 }
 
 /**
