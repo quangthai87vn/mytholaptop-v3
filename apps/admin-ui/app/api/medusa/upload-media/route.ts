@@ -23,8 +23,7 @@ import * as path from "path";
 import { requireAdminAuth } from "@/lib/auth/require-admin";
 import { requireCsrf } from "@/lib/auth/csrf";
 
-    // Navigate from apps/admin-ui/app/api/medusa/upload-media/ to apps/admin-ui/
-    const ADMIN_UI_ROOT = path.resolve(/*turbopackIgnore: true*/ process.cwd(), "apps", "admin-ui");
+const ADMIN_UI_ROOT = process.cwd();
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
