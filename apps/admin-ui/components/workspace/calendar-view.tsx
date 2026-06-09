@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/lib/workspace/types";
-import { PRIORITY_CONFIG } from "@/lib/workspace/types";
+import { STATUS_CONFIG } from "@/lib/workspace/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -31,8 +31,8 @@ function getFirstDayOfMonth(year: number, month: number) {
 
 const DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const MONTHS = [
-  "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
-  "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12",
+  "Th?ng 1", "Th?ng 2", "Th?ng 3", "Th?ng 4", "Th?ng 5", "Th?ng 6",
+  "Th?ng 7", "Th?ng 8", "Th?ng 9", "Th?ng 10", "Th?ng 11", "Th?ng 12",
 ];
 
 export function CalendarView({ tasks, onTaskClick }: CalendarViewProps) {
@@ -77,7 +77,7 @@ export function CalendarView({ tasks, onTaskClick }: CalendarViewProps) {
           </Button>
         </div>
         <Button variant="ghost" size="sm" className="text-xs h-8" onClick={goToday}>
-          Hôm nay
+          H?m nay
         </Button>
       </div>
 
@@ -131,15 +131,15 @@ export function CalendarView({ tasks, onTaskClick }: CalendarViewProps) {
               {/* Task dots */}
               <div className="space-y-0.5">
                 {dayTasks.slice(0, 3).map((task) => {
-                  const priority = PRIORITY_CONFIG[task.priority];
+                  const status = STATUS_CONFIG[task.status];
                   return (
                     <button
                       key={task.id}
                       onClick={() => onTaskClick?.(task)}
                       className={cn(
                         "w-full text-left px-1.5 py-0.5 rounded text-[10px] truncate transition-colors hover:opacity-80",
-                        priority.bgColor,
-                        priority.color
+                        status.bgColor,
+                        status.color
                       )}
                     >
                       {task.title}

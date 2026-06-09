@@ -1,34 +1,36 @@
-import { getTasks } from "@/lib/workspace/db";
-import { CalendarView } from "@/components/workspace/calendar-view";
-import { Calendar } from "lucide-react";
+import { getMasterDataItems, getProjects, getCampaigns, getActiveStaff } from "@/lib/workspace/db";
+import { CalendarClient } from "./calendar-client";
+import type { MasterDataItem } from "@/lib/workspace/types-master-data";
 
 export const dynamic = "force-dynamic";
 
-export default async function WorkspaceCalendarPage() {
-  const tasks = await getTasks();
+interface CalendarMasterData {
+  taskStatuses: MasterDataItem[];
+  taskTypes: MasterDataItem[];
+  channels: MasterDataItem[];
+  projects: Array<{ id: string; name: string }>;
+  campaigns: Array<{ id: string; name: string }>;
+  staff: Array<{ id: string; full_name: string }>;
+}
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Calendar className="size-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Lịch làm việc</h1>
-          <p className="text-sm text-slate-500">
-            Xem công việc theo lịch
-          </p>
-        </div>
-      </div>
+export default async function CalendarPage() {
+  const [taskStatuses, taskTypes, channels, projects, campaigns, staff] = await Promise.all([
+    getMasterDataItems("task_status"),
+    getMasterDataItems("task_type"),
+    getMasterDataItems("channel"),
+    getProjects(),
+    getCampaigns(),
+    getActiveStaff(),
+  ]);
 
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <CalendarView
-          tasks={tasks.filter((t) => t.due_date)}
-          onTaskClick={(task) => {
-            // navigate handled by client
-          }}
-        />
-      </div>
-    </div>
-  );
+  const masterData: CalendarMasterData = {
+    taskStatuses,
+    taskTypes,
+    channels,
+    projects: projects.map((p) => ({ id: p.id, name: p.name })),
+    campaigns: campaigns.map((c) => ({ id: c.id, name: c.name })),
+    staff: staff.map((s) => ({ id: s.id, full_name: s.full_name })),
+  };
+
+  return <CalendarClient masterData={masterData} />;
 }

@@ -123,32 +123,32 @@ CREATE INDEX IF NOT EXISTS idx_pm_status_history_created ON pm_status_history(cr
 INSERT INTO pm_tasks (id, project_id, campaign_id, title, description, status, priority, stage, due_date, progress, assignee_ids)
 VALUES
     -- Summer Sale Project
-    ('t1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Viết 10 bài Facebook post cho Summer Sale', 'Nội dung về laptop, phụ kiện giảm giá', 'in_progress', 'high', 'writing', '2026-06-05', 60, ARRAY['11111111-0000-0000-0000-000000000001']::UUID[]),
-    ('t2222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Quay video giới thiệu Summer Sale', 'Video 30s cho Facebook & TikTok', 'review', 'medium', 'review', '2026-06-03', 90, ARRAY['11111111-0000-0000-0000-000000000002']::UUID[]),
-    ('t3333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'aaaa2222-2222-2222-2222-222222222222', 'Viết bài SEO về laptop gaming', 'Bài viết 1500 từ, từ khóa laptop gaming giá rẻ', 'done', 'medium', 'published', '2026-05-28', 100, ARRAY['11111111-0000-0000-0000-000000000003']::UUID[]),
-    ('t4444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Thiết kế banner Summer Sale', 'Banner web + banner Facebook', 'todo', 'high', NULL, '2026-06-07', 0, ARRAY['11111111-0000-0000-0000-000000000003']::UUID[]),
-    ('t5555555-5555-5555-5555-555555555555', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Chụp ảnh sản phẩm laptop mới', 'Bộ ảnh 5-8 tấm cho content', 'in_progress', 'high', 'filming', '2026-06-04', 40, ARRAY['11111111-0000-0000-0000-000000000002']::UUID[]),
-    ('t6666666-6666-6666-6666-666666666666', '11111111-1111-1111-1111-111111111111', NULL, 'Lên kế hoạch influencer marketing', 'Tìm kiếm và liên hệ 3 influencer local', 'backlog', 'medium', NULL, '2026-06-20', 0, ARRAY[]::UUID[]),
-    ('t7777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Tạo prompt AI sinh hình ảnh sản phẩm', 'Dùng AI tạo mockup laptop', 'done', 'low', 'published', '2026-05-25', 100, ARRAY['11111111-0000-0000-0000-000000000001']::UUID[]),
+    ('c1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Viết 10 bài Facebook post cho Summer Sale', 'Nội dung về laptop, phụ kiện giảm giá', 'in_progress', 'high', 'writing', '2026-06-05', 60, ARRAY['11111111-0000-0000-0000-000000000001']::UUID[]),
+    ('c2222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Quay video giới thiệu Summer Sale', 'Video 30s cho Facebook & TikTok', 'review', 'medium', 'review', '2026-06-03', 90, ARRAY['11111111-0000-0000-0000-000000000002']::UUID[]),
+    ('c3333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'aaaa2222-2222-2222-2222-222222222222', 'Viết bài SEO về laptop gaming', 'Bài viết 1500 từ, từ khóa laptop gaming giá rẻ', 'done', 'medium', 'published', '2026-05-28', 100, ARRAY['11111111-0000-0000-0000-000000000003']::UUID[]),
+    ('c4444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Thiết kế banner Summer Sale', 'Banner web + banner Facebook', 'todo', 'high', NULL, '2026-06-07', 0, ARRAY['11111111-0000-0000-0000-000000000003']::UUID[]),
+    ('c5555555-5555-5555-5555-555555555555', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Chụp ảnh sản phẩm laptop mới', 'Bộ ảnh 5-8 tấm cho content', 'in_progress', 'high', 'filming', '2026-06-04', 40, ARRAY['11111111-0000-0000-0000-000000000002']::UUID[]),
+    ('c6666666-6666-6666-6666-666666666666', '11111111-1111-1111-1111-111111111111', NULL, 'Lên kế hoạch influencer marketing', 'Tìm kiếm và liên hệ 3 influencer local', 'backlog', 'medium', NULL, '2026-06-20', 0, ARRAY[]::UUID[]),
+    ('c7777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111', 'aaaa1111-1111-1111-1111-111111111111', 'Tạo prompt AI sinh hình ảnh sản phẩm', 'Dùng AI tạo mockup laptop', 'done', 'low', 'published', '2026-05-25', 100, ARRAY['11111111-0000-0000-0000-000000000001']::UUID[]),
     -- Gaming Launch Project
-    ('t8888888-8888-8888-8888-888888888888', '44444444-4444-4444-4444-444444444444', 'bbbb1111-1111-1111-1111-111111111111', 'Viết kịch bản video ra mắt gaming laptop', 'Script 60s cho video YouTube', 'in_progress', 'urgent', 'writing', '2026-06-02', 50, ARRAY['11111111-0000-0000-0000-000000000001']::UUID[]),
-    ('t9999999-9999-9999-9999-999999999999', '44444444-4444-4444-4444-444444444444', 'bbbb1111-1111-1111-1111-111111111111', 'Quay video unboxing gaming laptop', 'Video unboxing + first impression', 'todo', 'urgent', 'filming', '2026-06-08', 0, ARRAY['11111111-0000-0000-0000-000000000002']::UUID[]),
-    ('taaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', 'bbbb1111-1111-1111-1111-111111111111', 'Viết bài SEO gaming laptop ra mắt', 'Content SEO cho website', 'todo', 'high', NULL, '2026-06-10', 0, ARRAY['11111111-0000-0000-0000-000000000003']::UUID[]),
+    ('c8888888-8888-8888-8888-888888888888', '44444444-4444-4444-4444-444444444444', 'bbbb1111-1111-1111-1111-111111111111', 'Viết kịch bản video ra mắt gaming laptop', 'Script 60s cho video YouTube', 'in_progress', 'urgent', 'writing', '2026-06-02', 50, ARRAY['11111111-0000-0000-0000-000000000001']::UUID[]),
+    ('c9999999-9999-9999-9999-999999999999', '44444444-4444-4444-4444-444444444444', 'bbbb1111-1111-1111-1111-111111111111', 'Quay video unboxing gaming laptop', 'Video unboxing + first impression', 'todo', 'urgent', 'filming', '2026-06-08', 0, ARRAY['11111111-0000-0000-0000-000000000002']::UUID[]),
+    ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', 'bbbb1111-1111-1111-1111-111111111111', 'Viết bài SEO gaming laptop ra mắt', 'Content SEO cho website', 'todo', 'high', NULL, '2026-06-10', 0, ARRAY['11111111-0000-0000-0000-000000000003']::UUID[]),
     -- Back to School Project
-    ('tbbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', NULL, 'Lên chiến dịch Back to School content plan', 'Plan chi tiết 20 bài viết + 10 video', 'in_progress', 'high', NULL, '2026-06-15', 30, ARRAY['11111111-0000-0000-0000-000000000001']::UUID[])
+    ('cbbbbb01-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', NULL, 'Lên chiến dịch Back to School content plan', 'Plan chi tiết 20 bài viết + 10 video', 'in_progress', 'high', NULL, '2026-06-15', 30, ARRAY['e1111111-1111-1111-1111-111111111111']::UUID[])
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed task activities
 INSERT INTO pm_task_activities (task_id, actor_name, action, new_value, created_at)
 VALUES
-    ('t1111111-1111-1111-1111-111111111111', 'Nguyễn Văn An', 'created', 'Viết 10 bài Facebook post cho Summer Sale', '2026-05-25 09:00:00'),
-    ('t1111111-1111-1111-1111-111111111111', 'Nguyễn Văn An', 'status_changed', 'in_progress', '2026-05-26 10:00:00'),
-    ('t2222222-2222-2222-2222-222222222222', 'Trần Thị Minh', 'created', 'Quay video giới thiệu Summer Sale', '2026-05-26 11:00:00'),
-    ('t2222222-2222-2222-2222-222222222222', 'Trần Thị Minh', 'status_changed', 'review', '2026-06-01 15:00:00'),
-    ('t3333333-3333-3333-3333-333333333333', 'Hoàng Thị Lan', 'created', 'Viết bài SEO về laptop gaming', '2026-05-20 09:00:00'),
-    ('t3333333-3333-3333-3333-333333333333', 'Hoàng Thị Lan', 'status_changed', 'done', '2026-05-28 17:00:00'),
-    ('t5555555-5555-5555-5555-555555555555', 'Trần Thị Minh', 'created', 'Chụp ảnh sản phẩm laptop mới', '2026-06-01 08:00:00'),
-    ('t8888888-8888-8888-8888-888888888888', 'Nguyễn Văn An', 'created', 'Viết kịch bản video ra mắt gaming laptop', '2026-06-01 09:00:00'),
-    ('t7777777-7777-7777-7777-777777777777', 'Nguyễn Văn An', 'created', 'Tạo prompt AI sinh hình ảnh sản phẩm', '2026-05-24 10:00:00'),
-    ('t7777777-7777-7777-7777-777777777777', 'Nguyễn Văn An', 'status_changed', 'done', '2026-05-25 16:00:00')
+    ('c1111111-1111-1111-1111-111111111111', 'Nguyễn Văn An', 'created', 'Viết 10 bài Facebook post cho Summer Sale', '2026-05-25 09:00:00'),
+    ('c1111111-1111-1111-1111-111111111111', 'Nguyễn Văn An', 'status_changed', 'in_progress', '2026-05-26 10:00:00'),
+    ('c2222222-2222-2222-2222-222222222222', 'Trần Thị Minh', 'created', 'Quay video giới thiệu Summer Sale', '2026-05-26 11:00:00'),
+    ('c2222222-2222-2222-2222-222222222222', 'Trần Thị Minh', 'status_changed', 'review', '2026-06-01 15:00:00'),
+    ('c3333333-3333-3333-3333-333333333333', 'Hoàng Thị Lan', 'created', 'Viết bài SEO về laptop gaming', '2026-05-20 09:00:00'),
+    ('c3333333-3333-3333-3333-333333333333', 'Hoàng Thị Lan', 'status_changed', 'done', '2026-05-28 17:00:00'),
+    ('c5555555-5555-5555-5555-555555555555', 'Trần Thị Minh', 'created', 'Chụp ảnh sản phẩm laptop mới', '2026-06-01 08:00:00'),
+    ('c8888888-8888-8888-8888-888888888888', 'Nguyễn Văn An', 'created', 'Viết kịch bản video ra mắt gaming laptop', '2026-06-01 09:00:00'),
+    ('c7777777-7777-7777-7777-777777777777', 'Nguyễn Văn An', 'created', 'Tạo prompt AI sinh hình ảnh sản phẩm', '2026-05-24 10:00:00'),
+    ('c7777777-7777-7777-7777-777777777777', 'Nguyễn Văn An', 'status_changed', 'done', '2026-05-25 16:00:00')
 ON CONFLICT DO NOTHING;

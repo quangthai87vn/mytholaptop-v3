@@ -1,16 +1,28 @@
 import {
   getWorkspaceStats,
   getTasks,
-  getMediaWorkflows,
   getInternRankings,
   getProjects,
   getInterns,
+  getOverdueCampaigns,
 } from "@/lib/workspace/db";
 import { query } from "@/lib/db";
 import { WorkspaceStatsWidget } from "@/components/dashboard/workspace-stats-widget";
 import { DeadlineAlertWidget } from "@/components/dashboard/deadline-alert-widget";
+import { CampaignAlertWidget } from "@/components/dashboard/campaign-alert-widget";
 import { MediaStatsWidget } from "@/components/dashboard/media-stats-widget";
 import { TeamActivityWidget } from "@/components/dashboard/team-activity-widget";
+import { ContentCalendarWidget } from "@/components/dashboard/content-calendar-widget";
+import { NotificationAlertWidget } from "@/components/dashboard/notification-alert-widget";
+import { TeamPerformanceWidget } from "@/components/dashboard/team-performance-widget";
+import { ContentPipelineWidget } from "@/components/dashboard/content-pipeline-widget";
+import { ApprovalMetricsWidget } from "@/components/dashboard/approval-metrics-widget";
+import { PublishMetricsWidget } from "@/components/dashboard/publish-metrics-widget";
+import { KpiCharts } from "@/components/dashboard/kpi-charts";
+import { TasksByEmployeeWidget } from "@/components/dashboard/tasks-by-employee-widget";
+import { OverdueTasksWidget } from "@/components/dashboard/overdue-tasks-widget";
+import { CampaignProgressWidget } from "@/components/dashboard/campaign-progress-widget";
+import { TasksCompletedThisWeekWidget } from "@/components/dashboard/tasks-completed-week-widget";
 import { Kanban } from "lucide-react";
 import { InternCard } from "@/components/interns/intern-card";
 import Link from "next/link";
@@ -20,28 +32,29 @@ import { Target, CheckSquare, Clapperboard } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function WorkspacePage() {
-  const [stats, tasks, workflows, rankings, projects, interns] = await Promise.all([
+  const [stats, tasks, rankings, projects, interns, overdueCampaigns] = await Promise.all([
     getWorkspaceStats(),
     getTasks(),
-    getMediaWorkflows(),
     getInternRankings("weekly", 5),
     getProjects(),
     getInterns({ status: "active" }),
+    getOverdueCampaigns(),
   ]);
 
-  // Fetch recent activities
-  const { rows: activities } = await query<{
+  // Fetch recent activities (use view for unified activity stream)
+  const { rows: rawActivities } = await query<{
     id: string;
     actor_name: string | null;
-    action: string;
+    action_type: string;
     new_value: string | null;
     created_at: string;
   }>(`
-    SELECT ta.id, ta.actor_name, ta.action, ta.new_value, ta.created_at
-    FROM pm_task_activities ta
-    ORDER BY ta.created_at DESC
+    SELECT id, actor_name, action_type, new_value, created_at
+    FROM v_workspace_activities
+    ORDER BY created_at DESC
     LIMIT 15
   `);
+  const activities = rawActivities.map((r) => ({ ...r, action: r.action_type }));
 
   const topInternRankings = rankings.slice(0, 3);
 
@@ -87,15 +100,53 @@ export default async function WorkspacePage() {
       {/* Stats row */}
       <WorkspaceStatsWidget stats={stats} />
 
+      {/* Content calendar widget */}
+      <ContentCalendarWidget />
+
+      {/* Notification alerts */}
+      <NotificationAlertWidget />
+
+      {/* Row 1: Team performance + Content pipeline + Campaign progress */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <TeamPerformanceWidget />
+        <ContentPipelineWidget />
+        <CampaignProgressWidget />
+      </div>
+
+      {/* Row 2: Tasks by employee + Overdue tasks + Tasks completed this week */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <TasksByEmployeeWidget />
+        <OverdueTasksWidget />
+        <TasksCompletedThisWeekWidget />
+      </div>
+
+      {/* Row 3: Publish metrics + Weekly trend chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <PublishMetricsWidget />
+        </div>
+        <div className="lg:col-span-2">
+          <KpiCharts weeks={8} />
+        </div>
+      </div>
+
+      {/* Row 4: Approval metrics */}
+      <ApprovalMetricsWidget />
+
       {/* Main content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left column */}
         <div className="space-y-6">
+          {/* Campaign overdue alerts */}
+          {overdueCampaigns.length > 0 && (
+            <CampaignAlertWidget campaigns={overdueCampaigns} />
+          )}
+
           {/* Deadline alerts */}
           <DeadlineAlertWidget tasks={tasks} />
 
           {/* Media stats */}
-          <MediaStatsWidget workflows={workflows} />
+          <MediaStatsWidget tasks={tasks} />
         </div>
 
         {/* Right column */}
